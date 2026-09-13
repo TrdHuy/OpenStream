@@ -5,16 +5,26 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import dev.openstream.app.camera.CameraLens
 import dev.openstream.app.stream.ConnectionTarget
 import dev.openstream.app.stream.StreamConfig
 import dev.openstream.app.stream.StreamConfigStore
+import dev.openstream.app.stream.StreamingCapabilityResolver
+import dev.openstream.app.stream.SupportedStreamMode
 
 class SettingsActivity : Activity() {
 
+    private lateinit var capabilityLens: Spinner
+    private lateinit var capabilityMode: Spinner
+    private lateinit var capabilityNote: TextView
     private lateinit var inputWidth: EditText
     private lateinit var inputHeight: EditText
     private lateinit var inputFps: EditText
@@ -33,10 +43,18 @@ class SettingsActivity : Activity() {
     private lateinit var btnBack: TextView
     private lateinit var versionInfo: TextView
 
+    private var supportedModes: List<SupportedStreamMode> = emptyList()
+    private var visibleModes: List<SupportedStreamMode> = emptyList()
+    private var capabilityLenses: List<CameraLens> = emptyList()
+    private var selectedCapabilityLens: CameraLens? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
+        capabilityLens = findViewById(R.id.settingsCapabilityLens)
+        capabilityMode = findViewById(R.id.settingsCapabilityMode)
+        capabilityNote = findViewById(R.id.settingsCapabilityNote)
         inputWidth = findViewById(R.id.settingsWidth)
         inputHeight = findViewById(R.id.settingsHeight)
         inputFps = findViewById(R.id.settingsFps)
@@ -55,7 +73,8 @@ class SettingsActivity : Activity() {
         btnBack = findViewById(R.id.btnBackSettings)
         versionInfo = findViewById(R.id.settingsVersionInfo)
 
-        loadSettings()
+        val config = loadSettings()
+        setupCapabilitySelectors(config)
         showVersionInfo()
 
         btnSave.setOnClickListener { saveSettings(connectAfterSave = false) }
@@ -63,7 +82,7 @@ class SettingsActivity : Activity() {
         btnBack.setOnClickListener { finish() }
     }
 
-    private fun loadSettings() {
+    private fun loadSettings(): StreamConfig {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val config = StreamConfigStore.load(this)
 
@@ -83,6 +102,88 @@ class SettingsActivity : Activity() {
         inputLatency.setText(config.latencyMs.toString())
         val listenPort = prefs.getInt(KEY_LISTENING_PORT, ConnectionTarget.DEFAULT_PORT)
         inputListeningPort.setText(listenPort.toString())
+        return config
+    }
+
+    private fun setupCapabilitySelectors(config: StreamConfig) {
+        supportedModes = runCatching {
+            StreamingCapabilityResolver(this).resolve(config.bitrate)
+        }.getOrElse { error ->
+            capabilityNote.text = "Không đọc được khả năng camera/bộ mã hóa: ${error.message ?: "lỗi không xác định"}"
+            emptyList()
+        }
+
+        if (supportedModes.isEmpty()) {
+            capabilityLens.isEnabled = false
+            capabilityMode.isEnabled = false
+            btnSave.isEnabled = false
+            btnSaveAndConnect.isEnabled = false
+            capabilityNote.text = "Không tìm thấy tổ hợp Camera2 + H.264 phần cứng hợp lệ ở tốc độ bit hiện tại."
+            return
+        }
+
+        capabilityLenses = supportedModes.map { it.lens }.distinct()
+        val lensAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            capabilityLenses.map { it.displayName },
+        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        capabilityLens.adapter = lensAdapter
+
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val savedLens = prefs.getString(KEY_CAPABILITY_LENS, null)
+            ?.let { name -> runCatching { CameraLens.valueOf(name) }.getOrNull() }
+        val matchingLens = capabilityLenses.firstOrNull { lens ->
+            lens == savedLens || supportedModes.any {
+                it.lens == lens && it.width == config.width && it.height == config.height && it.fps == config.fps
+            }
+        } ?: capabilityLenses.first()
+        val initialLensIndex = capabilityLenses.indexOf(matchingLens).coerceAtLeast(0)
+
+        capabilityLens.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val lens = capabilityLenses.getOrNull(position) ?: return
+                selectedCapabilityLens = lens
+                updateModeSpinner(lens, config)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        capabilityLens.setSelection(initialLensIndex)
+        selectedCapabilityLens = matchingLens
+        updateModeSpinner(matchingLens, config)
+    }
+
+    private fun updateModeSpinner(lens: CameraLens, preferred: StreamConfig) {
+        visibleModes = supportedModes.filter { it.lens == lens }
+        val modeAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            visibleModes.map { it.label },
+        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        capabilityMode.adapter = modeAdapter
+        capabilityMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                visibleModes.getOrNull(position)?.let(::applyCapabilityMode)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        val preferredIndex = visibleModes.indexOfFirst {
+            it.width == preferred.width && it.height == preferred.height && it.fps == preferred.fps
+        }.takeIf { it >= 0 } ?: 0
+        capabilityMode.setSelection(preferredIndex)
+        visibleModes.getOrNull(preferredIndex)?.let(::applyCapabilityMode)
+    }
+
+    private fun applyCapabilityMode(mode: SupportedStreamMode) {
+        inputWidth.setText(mode.width.toString())
+        inputHeight.setText(mode.height.toString())
+        inputFps.setText(mode.fps.toString())
+        capabilityNote.text = buildString {
+            append("Camera ID ${mode.cameraId} · H.264 phần cứng")
+            if (mode.highProfileAvailable) append(" · High Profile khả dụng")
+        }
     }
 
     private fun saveSettings(connectAfterSave: Boolean) {
@@ -97,6 +198,17 @@ class SettingsActivity : Activity() {
         val audioSampleRate = validatedNumber(inputAudioSampleRate, current.audioSampleRate, StreamConfigStore.MIN_AUDIO_SAMPLE_RATE..StreamConfigStore.MAX_AUDIO_SAMPLE_RATE, "Tần số lấy mẫu âm thanh") ?: return
         val audioChannels = validatedNumber(inputAudioChannels, current.audioChannelCount, StreamConfigStore.MIN_AUDIO_CHANNELS..StreamConfigStore.MAX_AUDIO_CHANNELS, "Số kênh âm thanh") ?: return
         val audioBitrateKbps = validatedNumber(inputAudioBitrateKbps, current.audioBitrateKbps, StreamConfigStore.MIN_AUDIO_BITRATE_KBPS..StreamConfigStore.MAX_AUDIO_BITRATE_KBPS, "Tốc độ bit âm thanh") ?: return
+
+        val lens = selectedCapabilityLens
+        val validAtRequestedBitrate = lens != null && runCatching {
+            StreamingCapabilityResolver(this).resolve(bitrateMbps * 1_000_000).any {
+                it.lens == lens && it.width == width && it.height == height && it.fps == fps
+            }
+        }.getOrDefault(false)
+        if (!validAtRequestedBitrate) {
+            inputBitrateMbps.error = "Tổ hợp ống kính/độ phân giải/FPS này không hợp lệ ở tốc độ bit đã chọn"
+            return
+        }
 
         val host = inputObsHost.text.toString().trim()
         if (!SettingsValidator.isValidHost(host, required = connectAfterSave)) {
@@ -127,6 +239,7 @@ class SettingsActivity : Activity() {
             .putString(KEY_OBS_HOST, host)
             .putInt(KEY_OBS_PORT, port)
             .putInt(KEY_LISTENING_PORT, listenPort)
+            .putString(KEY_CAPABILITY_LENS, lens?.name)
             .apply()
 
         Toast.makeText(this, "Đã lưu cấu hình", Toast.LENGTH_SHORT).show()
@@ -197,6 +310,7 @@ class SettingsActivity : Activity() {
         const val KEY_OBS_PORT = "obs_port"
         const val KEY_LATENCY = StreamConfigStore.KEY_LATENCY
         const val KEY_LISTENING_PORT = "listening_port"
+        const val KEY_CAPABILITY_LENS = "capability_lens"
         const val EXTRA_CONNECT_AFTER_SAVE = "connect_after_save"
     }
 }
