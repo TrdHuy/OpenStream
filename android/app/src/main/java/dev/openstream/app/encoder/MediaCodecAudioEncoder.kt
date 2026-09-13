@@ -14,6 +14,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.Process
 import android.util.Log
+import dev.openstream.app.stream.StreamConfig
 import java.nio.ByteBuffer
 import kotlin.math.max
 
@@ -37,10 +38,13 @@ class MediaCodecAudioEncoder(
     private val deliveryLock = Any()
 
     fun start() = synchronized(lifecycleLock) {
+        if (!StreamConfig.Default1080p30.audioEnabled) {
+            Log.i(TAG, "Microphone audio disabled by stream configuration")
+            return@synchronized
+        }
         check(context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             "Microphone permission is not granted"
         }
-        // If already running, stop first to allow clean restart
         if (codec != null) {
             stop()
         }
@@ -70,8 +74,6 @@ class MediaCodecAudioEncoder(
                 sampleRate, channelConfig, AudioFormat.ENCODING_PCM_16BIT
             )
             check(minBufferSize > 0) { "AudioRecord does not support $sampleRate Hz / $channelCount ch PCM16" }
-            // Target at most 80 ms of capture buffering where the device minimum allows it.
-            // READ_BLOCKING applies backpressure once this capacity is reached instead of allowing audio to trail video.
             val targetBufferSize = bytesForDurationMs(MAX_CAPTURE_BUFFER_MS)
             if (minBufferSize > targetBufferSize) {
                 Log.w(TAG, "AudioRecord minimum buffer exceeds the ${MAX_CAPTURE_BUFFER_MS} ms latency target: $minBufferSize bytes")
@@ -118,9 +120,6 @@ class MediaCodecAudioEncoder(
                             capturedSamples += samplesRead
                             drainEncoder(encoder, generation)
                         } else if (bytesRead < 0) {
-                            // AudioRecord reports terminal capture failures as negative error codes.
-                            // In particular ERROR_DEAD_OBJECT requires the recorder to be recreated;
-                            // continuing here would spin the urgent-audio thread and never recover audio.
                             throw IllegalStateException("AudioRecord read failed: $bytesRead")
                         } else {
                             drainEncoder(encoder, generation)
@@ -145,8 +144,6 @@ class MediaCodecAudioEncoder(
                 start()
             }
         } catch (error: Throwable) {
-            // start() is transactional: a recorder/codec/thread failure must not leave
-            // partially started audio resources behind for the next reconnect.
             stop()
             throw error
         }
