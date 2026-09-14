@@ -9,11 +9,23 @@ data class StreamStats(
     val accessUnitsSent: Long = 0,
     val keyframesSent: Long = 0,
     val bytesSent: Long = 0,
+    val audioAccessUnitsSent: Long = 0,
+    val audioBytesSent: Long = 0,
     val sendFailures: Long = 0,
     val lastPresentationTimeUs: Long = 0,
+    val connected: Boolean = false,
+    val successfulConnections: Long = 0,
+    val reconnects: Long = 0,
+    val connectionLosses: Long = 0,
+    val lifetimeAccessUnitsSent: Long = 0,
+    val lifetimeBytesSent: Long = 0,
+    val currentSessionGeneration: Long = 0,
 ) {
     val secondsSent: Double
         get() = lastPresentationTimeUs / 1_000_000.0
+
+    val totalSessionBytesSent: Long
+        get() = bytesSent + audioBytesSent
 }
 
 data class SrtSendResult(
@@ -28,19 +40,38 @@ class SrtStreamClient {
     private val operationLock = Any()
     private val stateLock = Any()
     val stats: StreamStats
-        get() = StreamStats(
-            accessUnitsSent = accessUnitsSent.get(),
-            keyframesSent = keyframesSent.get(),
-            bytesSent = bytesSent.get(),
-            sendFailures = sendFailures.get(),
-            lastPresentationTimeUs = lastPresentationTimeUs.get(),
-        )
+        get() {
+            val connections = successfulConnections.get()
+            return StreamStats(
+                accessUnitsSent = accessUnitsSent.get(),
+                keyframesSent = keyframesSent.get(),
+                bytesSent = bytesSent.get(),
+                audioAccessUnitsSent = audioAccessUnitsSent.get(),
+                audioBytesSent = audioBytesSent.get(),
+                sendFailures = sendFailures.get(),
+                lastPresentationTimeUs = lastPresentationTimeUs.get(),
+                connected = connected,
+                successfulConnections = connections,
+                reconnects = (connections - 1L).coerceAtLeast(0L),
+                connectionLosses = connectionLosses.get(),
+                lifetimeAccessUnitsSent = lifetimeAccessUnitsSent.get(),
+                lifetimeBytesSent = lifetimeBytesSent.get(),
+                currentSessionGeneration = sessionGeneration.get(),
+            )
+        }
 
     private val accessUnitsSent = AtomicLong()
     private val keyframesSent = AtomicLong()
     private val bytesSent = AtomicLong()
+    private val audioAccessUnitsSent = AtomicLong()
+    private val audioBytesSent = AtomicLong()
     private val sendFailures = AtomicLong()
     private val lastPresentationTimeUs = AtomicLong()
+    private val successfulConnections = AtomicLong()
+    private val connectionLosses = AtomicLong()
+    private val lifetimeAccessUnitsSent = AtomicLong()
+    private val lifetimeBytesSent = AtomicLong()
+    private val failedGeneration = AtomicLong(Long.MIN_VALUE)
 
     fun connect(url: String, codecMime: String, width: Int, height: Int, fps: Int) {
         require(url.startsWith("srt://")) { "OpenStream V1 expects an SRT URL" }
@@ -75,10 +106,13 @@ class SrtStreamClient {
         if (sent) {
             if (!isCodecConfig) {
                 accessUnitsSent.incrementAndGet()
+                lifetimeAccessUnitsSent.incrementAndGet()
                 if ((accessUnit.flags and BUFFER_FLAG_KEY_FRAME) != 0) {
                     keyframesSent.incrementAndGet()
                 }
-                bytesSent.addAndGet(accessUnit.data.size.toLong())
+                val payloadBytes = accessUnit.data.size.toLong()
+                bytesSent.addAndGet(payloadBytes)
+                lifetimeBytesSent.addAndGet(payloadBytes)
                 lastPresentationTimeUs.updateAndGet { current ->
                     maxOf(current, accessUnit.presentationTimeUs)
                 }
@@ -101,7 +135,16 @@ class SrtStreamClient {
             return@synchronized SrtSendResult(false, generation, recoveryRequired = true)
         }
         val sent = SrtNativeBridge.sendAudio(accessUnit.data, accessUnit.presentationTimeUs, accessUnit.flags)
-        if (!sent) {
+        val isCodecConfig = (accessUnit.flags and BUFFER_FLAG_CODEC_CONFIG) != 0
+        if (sent) {
+            if (!isCodecConfig) {
+                audioAccessUnitsSent.incrementAndGet()
+                lifetimeAccessUnitsSent.incrementAndGet()
+                val payloadBytes = accessUnit.data.size.toLong()
+                audioBytesSent.addAndGet(payloadBytes)
+                lifetimeBytesSent.addAndGet(payloadBytes)
+            }
+        } else {
             sendFailures.incrementAndGet()
             markSendFailure(generation)
         }
@@ -163,6 +206,7 @@ class SrtStreamClient {
         val generation = synchronized(stateLock) {
             connected = false
             sessionGeneration.incrementAndGet().also { generation ->
+                failedGeneration.set(Long.MIN_VALUE)
                 SrtNativeBridge.beginSession(generation)
             }
         }
@@ -172,8 +216,9 @@ class SrtStreamClient {
                 true
             } else {
                 check(didConnect) { "Native SRT bridge failed to $operationName" }
-                resetStats()
+                resetSessionStats()
                 connected = true
+                successfulConnections.incrementAndGet()
                 false
             }
         }
@@ -185,10 +230,12 @@ class SrtStreamClient {
         }
     }
 
-    private fun resetStats() {
+    private fun resetSessionStats() {
         accessUnitsSent.set(0)
         keyframesSent.set(0)
         bytesSent.set(0)
+        audioAccessUnitsSent.set(0)
+        audioBytesSent.set(0)
         sendFailures.set(0)
         lastPresentationTimeUs.set(0)
     }
@@ -196,6 +243,10 @@ class SrtStreamClient {
     private fun markSendFailure(generation: Long) {
         synchronized(stateLock) {
             if (sessionGeneration.get() == generation) {
+                if (failedGeneration.get() != generation) {
+                    failedGeneration.set(generation)
+                    connectionLosses.incrementAndGet()
+                }
                 connected = false
             }
         }

@@ -58,5 +58,13 @@ def test_main_activity_drops_stale_failure_before_destructive_recovery():
     stale_guard = posted.index(
         "if (!streamClient.isCurrentSessionGeneration(sessionGeneration)) return@post"
     )
-    stop_stream = posted.index("stopStream(updateStatus = false)")
+    stop_stream = posted.index("stopStream(")
     assert stale_guard < stop_stream
+
+    # Phase 6 intentionally preserves caller intent while rebuilding the failed
+    # media/transport session. The stale-generation guard must still happen
+    # before that destructive teardown.
+    recovery = posted[stop_stream:]
+    assert "preserveCallerMode = true" in recovery
+    assert "preserveCallerTarget = true" in recovery
+    assert 'scheduleCallerReconnect(target, "media/transport failure")' in recovery

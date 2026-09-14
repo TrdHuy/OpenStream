@@ -1,0 +1,178 @@
+name: Phase 6 Soak E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      adb_serial:
+        description: "ADB serial override; để trống nếu runner chỉ có đúng 1 device đã kết nối"
+        required: false
+        default: ""
+        type: string
+      receiver_host:
+        description: "IP receiver override; để trống để lấy tailscale ip -4 trên runner"
+        required: false
+        default: ""
+        type: string
+      duration_seconds:
+        description: "Thời lượng soak, 60-3600 giây"
+        required: true
+        default: "1800"
+        type: string
+      stream_bitrate_mbps:
+        description: "Bitrate mục tiêu Phase 6, 20-40 Mbps"
+        required: true
+        default: "30"
+        type: string
+      capability_bitrate_mbps:
+        description: "Bitrate gate capability 4K30"
+        required: true
+        default: "30"
+        type: string
+      latency_ms:
+        description: "SRT latency"
+        required: true
+        default: "2000"
+        type: string
+      receiver_port:
+        description: "Cổng SRT listener trên runner"
+        required: true
+        default: "19060"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    name: Build app + instrumentation APKs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.0.12077973"
+
+      - name: Compute Android version metadata
+        id: version
+        run: echo "code=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+
+      - name: Run repository tests and build device APKs
+        env:
+          OPENSTREAM_VERSION_NAME: 1.0.1
+          OPENSTREAM_VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q
+          cd android
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+
+      - name: Normalize APK names
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/openstream-android.apk
+          cp android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk dist/openstream-android-test.apk
+
+      - name: Upload device APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-device-apks
+          path: dist/*.apk
+          if-no-files-found: error
+
+  device-soak:
+    name: 4K30 + mic long-running soak
+    needs: build-android
+    runs-on: [self-hosted, linux, openstream-device-lab]
+    timeout-minutes: 75
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download app + instrumentation APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: phase6-device-apks
+          path: dist
+
+      - name: Resolve device and receiver
+        id: lab
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v adb
+          command -v ffmpeg
+          command -v ffprobe
+          command -v python3
+
+          adb_serial='${{ inputs.adb_serial }}'
+          if [[ -z "$adb_serial" ]]; then
+            mapfile -t devices < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
+            if [[ ${#devices[@]} -ne 1 ]]; then
+              echo "Cần đúng 1 ADB device khi adb_serial để trống; hiện có ${#devices[@]}" >&2
+              printf '%s\n' "${devices[@]}" >&2
+              exit 1
+            fi
+            adb_serial="${devices[0]}"
+          fi
+
+          receiver_host='${{ inputs.receiver_host }}'
+          if [[ -z "$receiver_host" ]]; then
+            command -v tailscale
+            receiver_host="$(tailscale ip -4 | head -n1)"
+          fi
+          [[ -n "$receiver_host" ]]
+
+          echo "adb_serial=$adb_serial" >> "$GITHUB_OUTPUT"
+          echo "receiver_host=$receiver_host" >> "$GITHUB_OUTPUT"
+          echo "ADB target: $adb_serial"
+          echo "Receiver host: $receiver_host"
+
+      - name: Validate soak harness
+        run: |
+          python3 -m py_compile tools/phase3_device_e2e.py tools/phase6_soak_e2e.py
+          ffmpeg -hide_banner -protocols | grep -w srt
+
+      - name: Run Phase 6 soak
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/phase6_soak_e2e.py \
+            --adb-serial '${{ steps.lab.outputs.adb_serial }}' \
+            --receiver-host '${{ steps.lab.outputs.receiver_host }}' \
+            --app-apk dist/openstream-android.apk \
+            --test-apk dist/openstream-android-test.apk \
+            --receiver-port '${{ inputs.receiver_port }}' \
+            --duration-seconds '${{ inputs.duration_seconds }}' \
+            --stream-bitrate-mbps '${{ inputs.stream_bitrate_mbps }}' \
+            --capability-bitrate-mbps '${{ inputs.capability_bitrate_mbps }}' \
+            --latency-ms '${{ inputs.latency_ms }}' \
+            --evidence-dir build/phase6-soak-e2e
+
+      - name: Stop test app
+        if: always()
+        run: adb -s '${{ steps.lab.outputs.adb_serial }}' shell am force-stop dev.openstream.app || true
+
+      - name: Upload Phase 6 soak evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-soak-e2e-evidence
+          path: build/phase6-soak-e2e
+          if-no-files-found: warn

@@ -35,6 +35,7 @@ import dev.openstream.app.encoder.MediaCodecAudioEncoder
 import dev.openstream.app.encoder.MediaCodecVideoEncoder
 import dev.openstream.app.stream.ConnectionTarget
 import dev.openstream.app.stream.StreamConfig
+import dev.openstream.app.telemetry.SendRateMeter
 import dev.openstream.app.telemetry.TelemetrySampler
 
 class MainActivity : Activity() {
@@ -101,11 +102,16 @@ class MainActivity : Activity() {
     private var currentDevices: List<DiscoveredObsDevice> = emptyList()
     private var activeStreamBitrate: Int = streamConfig.bitrate
     private val callerLifecycleLock = Any()
+    private val sendRateMeter = SendRateMeter()
+    private var activeCallerTarget: ConnectionTarget? = null
+    private var callerReconnectRunnable: Runnable? = null
+    private var callerReconnectAttempt = 0
+    private var telemetryTick = 0L
 
     private val statsTicker = object : Runnable {
         override fun run() {
             renderStreamStats()
-            if (activeTargetName != null) {
+            if (activeTargetName != null || (callerModeActive && activeCallerTarget != null)) {
                 mainHandler.postDelayed(this, 1_000)
             }
         }
@@ -235,6 +241,10 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         activityStarted = false
+        cancelCallerReconnect()
+        activeCallerTarget = null
+        callerModeActive = false
+        sendRateMeter.reset()
         cancelLensRestart()
         camera.stop()
         stopPhoneServer(clearReservation = false, updateStatus = false)
@@ -322,7 +332,11 @@ class MainActivity : Activity() {
             startActivityForResult(intent, SETTINGS_REQUEST_CODE)
         }
         btnStop.setOnClickListener {
-            stopPhoneServer(clearReservation = false)
+            if (callerModeActive) {
+                stopStream()
+            } else {
+                stopPhoneServer(clearReservation = false)
+            }
             startPreviewIfAllowed()
             startPhoneServerIfAllowed()
         }
@@ -365,13 +379,19 @@ class MainActivity : Activity() {
                 }
                 return@post
             }
-            if (activeTargetName == null && callerConnectThread == null) return@post
-            stopStream(updateStatus = false)
+
+            val target = activeCallerTarget
+            if (!callerModeActive || target == null) return@post
+            stopStream(
+                updateStatus = false,
+                preserveCallerMode = true,
+                preserveCallerTarget = true,
+            )
             startPreviewIfAllowed()
-            startPhoneServerIfAllowed()
-            statusText.text = "Connection lost"
+            statusText.text = "Reconnecting…"
             statusText.setTextColor(getColor(R.color.os_warning))
-            statusDetail.text = getString(R.string.status_waiting)
+            statusDetail.text = "Transport lost → ${target.name}"
+            scheduleCallerReconnect(target, "media/transport failure")
         }
     }
 
@@ -646,14 +666,25 @@ class MainActivity : Activity() {
         startStream(target)
     }
 
-    private fun startStream(target: ConnectionTarget) {
+    private fun startStream(target: ConnectionTarget, reconnecting: Boolean = false) {
+        if (!reconnecting) {
+            cancelCallerReconnect()
+            activeCallerTarget = target
+            callerReconnectAttempt = 0
+        } else if (activeCallerTarget != target) {
+            return
+        }
         callerModeActive = true
-        stopStream(updateStatus = false, preserveCallerMode = true)
+        stopStream(
+            updateStatus = false,
+            preserveCallerMode = true,
+            preserveCallerTarget = true,
+        )
         // Caller mode and listener mode share one native SRT transport. Fully
         // stop the listener before opening a manual caller connection.
         stopPhoneServer(clearReservation = true, updateStatus = false)
         useStreamBitrate(target.bitrateMbps)
-        statusText.text = "Connecting…"
+        statusText.text = if (reconnecting) "Reconnecting…" else "Connecting…"
         statusDetail.text = "${currentLens.displayName} → ${target.name}"
         val generation = callerGeneration + 1
         callerGeneration = generation
@@ -673,7 +704,9 @@ class MainActivity : Activity() {
                     camera.startStreaming(encoder.inputSurface())
                 }
                 mainHandler.post {
-                    if (callerGeneration != generation) return@post
+                    if (callerGeneration != generation || activeCallerTarget != target) return@post
+                    callerReconnectAttempt = 0
+                    sendRateMeter.reset()
                     activeTargetName = target.name
                     mainHandler.removeCallbacks(statsTicker)
                     mainHandler.post(statsTicker)
@@ -687,12 +720,11 @@ class MainActivity : Activity() {
                     }
                 }
                 mainHandler.post {
-                    if (callerGeneration != generation) return@post
-                    callerModeActive = false
-                    startPreviewIfAllowed()
-                    startPhoneServerIfAllowed()
-                    statusText.text = "Connection failed"
-                    statusDetail.text = error.message ?: "Unknown error"
+                    if (callerGeneration != generation || activeCallerTarget != target) return@post
+                    if (callerModeActive && activityStarted) {
+                        hideLiveState()
+                        scheduleCallerReconnect(target, error.message ?: "connect failed")
+                    }
                 }
             } finally {
                 if (callerConnectThread === Thread.currentThread()) {
@@ -704,6 +736,38 @@ class MainActivity : Activity() {
         }
         callerConnectThread = thread
         thread.start()
+    }
+
+    private fun scheduleCallerReconnect(target: ConnectionTarget, reason: String) {
+        if (!activityStarted || !callerModeActive || activeCallerTarget != target) return
+        if (callerReconnectRunnable != null) return
+
+        callerReconnectAttempt += 1
+        val exponent = (callerReconnectAttempt - 1).coerceIn(0, 3)
+        val delayMs = minOf(
+            CALLER_RECONNECT_MAX_DELAY_MS,
+            CALLER_RECONNECT_BASE_DELAY_MS * (1L shl exponent),
+        )
+        statusText.text = "Reconnecting…"
+        statusText.setTextColor(getColor(R.color.os_warning))
+        statusDetail.text = "${target.name} · retry $callerReconnectAttempt in ${delayMs}ms"
+        Log.w(
+            "OpenStream",
+            "Caller reconnect scheduled attempt=$callerReconnectAttempt delayMs=$delayMs reason=$reason",
+        )
+
+        val retry = Runnable {
+            callerReconnectRunnable = null
+            if (!activityStarted || !callerModeActive || activeCallerTarget != target) return@Runnable
+            startStream(target, reconnecting = true)
+        }
+        callerReconnectRunnable = retry
+        mainHandler.postDelayed(retry, delayMs)
+    }
+
+    private fun cancelCallerReconnect() {
+        callerReconnectRunnable?.let(mainHandler::removeCallbacks)
+        callerReconnectRunnable = null
     }
 
     private fun startAudioIfAllowed() {
@@ -760,6 +824,7 @@ class MainActivity : Activity() {
                         activeTargetName = liveTargetName
                         runOnUiThread {
                             if (!isListenerActive(generation)) return@runOnUiThread
+                            sendRateMeter.reset()
                             showLiveState(liveTargetName)
                             mainHandler.removeCallbacks(statsTicker)
                             mainHandler.post(statsTicker)
@@ -836,6 +901,7 @@ class MainActivity : Activity() {
         activeTargetName = null
         mainHandler.removeCallbacks(statsTicker)
         streamClient.disconnect()
+        sendRateMeter.reset()
         val thread = listenerThread
         thread?.interrupt()
         if (thread != null && thread !== Thread.currentThread()) {
@@ -857,14 +923,21 @@ class MainActivity : Activity() {
     private fun stopStream(
         updateStatus: Boolean = true,
         preserveCallerMode: Boolean = false,
+        preserveCallerTarget: Boolean = false,
     ) {
         callerGeneration += 1
         callerConnectThread?.interrupt()
         if (!preserveCallerMode) callerModeActive = false
+        if (!preserveCallerTarget) {
+            activeCallerTarget = null
+            callerReconnectAttempt = 0
+            cancelCallerReconnect()
+        }
         activeTargetName = null
         mainHandler.removeCallbacks(statsTicker)
         phoneConnected = false
         streamClient.disconnect()
+        sendRateMeter.reset()
         synchronized(callerLifecycleLock) {
             stopActiveEncoding(updateStatus)
         }
@@ -989,6 +1062,7 @@ class MainActivity : Activity() {
         val targetName = activeTargetName ?: return
         val stats = streamClient.stats
         val megabits = stats.bytesSent * 8.0 / 1_000_000.0
+        val actualBitrateMbps = sendRateMeter.sample(stats.lifetimeBytesSent)?.div(1_000_000.0)
 
         if (forceFailure || stats.sendFailures > 0) {
             statusText.text = "Send issue"
@@ -1001,6 +1075,8 @@ class MainActivity : Activity() {
             statusText.setTextColor(getColor(R.color.os_text_primary))
         }
 
+        // Keep this exact three-field chip stable: Phase 3 instrumentation uses it
+        // as the durable UI counter contract after statusDetail becomes telemetry-rich.
         streamInfoChip.visibility = View.VISIBLE
         streamInfoChip.text = String.format(
             "%d f · %d kf · %.1f Mb",
@@ -1008,12 +1084,43 @@ class MainActivity : Activity() {
             stats.keyframesSent,
             megabits,
         )
+        val actualRateText = actualBitrateMbps?.let { String.format("%.1f", it) } ?: "—"
+        val actualProfile = encoder.actualOutputProfile?.toString() ?: "?"
         statusDetail.text = String.format(
-            "%.1fs · %d errors · %s",
+            "%.1fs · tx %s/%d Mbps · a:%d · r:%d l:%d · p:%s",
             stats.secondsSent,
-            stats.sendFailures,
-            currentLens.displayName,
+            actualRateText,
+            activeStreamBitrate / 1_000_000,
+            stats.audioAccessUnitsSent,
+            stats.reconnects,
+            stats.connectionLosses,
+            actualProfile,
         )
+
+        telemetryTick += 1
+        if (telemetryTick % TELEMETRY_LOG_INTERVAL_TICKS == 0L) {
+            val device = telemetry.sample(
+                streamUrl = activeCallerTarget?.toSrtCallerUrl()
+                    ?: "srt://0.0.0.0:$currentPort?mode=listener",
+                codec = encoder.actualHardwareCodecName ?: encoder.codecName,
+                width = streamConfig.width,
+                height = streamConfig.height,
+                fps = streamConfig.fps,
+                bitrate = activeStreamBitrate,
+                encoderState = if (stats.connected) "streaming" else "disconnected",
+            )
+            Log.i(
+                "OpenStreamTelemetry",
+                "targetMbps=${activeStreamBitrate / 1_000_000} " +
+                    "actualMbps=${actualBitrateMbps ?: -1.0} " +
+                    "videoAu=${stats.accessUnitsSent} keyframes=${stats.keyframesSent} " +
+                    "audioAu=${stats.audioAccessUnitsSent} bytes=${stats.totalSessionBytesSent} " +
+                    "losses=${stats.connectionLosses} reconnects=${stats.reconnects} " +
+                    "codec=${device.codec} profile=$actualProfile " +
+                    "rssi=${device.wifiRssi} battery=${device.batteryPercent} " +
+                    "temperatureC=${device.temperatureCelsius} thermal=${device.thermalStatus}",
+            )
+        }
     }
 
     // ─────────────────────────── Utilities ───────────────────────────
@@ -1166,6 +1273,9 @@ class MainActivity : Activity() {
         private const val LISTENER_POLL_MS = 250L
         private const val LISTENER_RETRY_MS = 750L
         private const val LISTENER_STOP_TIMEOUT_MS = 2_000L
+        private const val CALLER_RECONNECT_BASE_DELAY_MS = 750L
+        private const val CALLER_RECONNECT_MAX_DELAY_MS = 5_000L
+        private const val TELEMETRY_LOG_INTERVAL_TICKS = 10L
         private const val SETTINGS_REQUEST_CODE = 200
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.CAMERA,
