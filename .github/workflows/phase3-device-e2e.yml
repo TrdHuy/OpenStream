@@ -1,0 +1,210 @@
+name: Phase 3 Device E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      stream_bitrate_mbps:
+        description: "Bitrate E2E mạng; dùng 8 khi Tailscale chậm"
+        required: true
+        default: "8"
+        type: string
+      capability_bitrate_mbps:
+        description: "Bitrate để gate capability 4K30 hardware"
+        required: true
+        default: "30"
+        type: string
+      duration_seconds:
+        description: "Thời lượng mẫu E2E"
+        required: true
+        default: "15"
+        type: string
+      latency_ms:
+        description: "SRT latency cho đường Tailscale"
+        required: true
+        default: "2000"
+        type: string
+  push:
+    branches:
+      - phase-3-4k30-mic-path
+    paths:
+      - .github/workflows/phase3-device-e2e.yml
+      - android/**
+      - tools/phase3_device_e2e.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase3-openstream-device-lab
+  cancel-in-progress: false
+
+jobs:
+  build-apks:
+    name: Build app + instrumentation APKs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.0.12077973"
+
+      - name: Verify bundled SRT revision used by device gate
+        run: |
+          set -euo pipefail
+          grep -q '#define SRT_VERSION_MAJOR 1' android/app/src/main/cpp/third_party/srt/include/srt/version.h
+          grep -q '#define SRT_VERSION_MINOR 5' android/app/src/main/cpp/third_party/srt/include/srt/version.h
+          grep -q '#define SRT_VERSION_PATCH 5' android/app/src/main/cpp/third_party/srt/include/srt/version.h
+          test -f android/app/src/main/cpp/third_party/srt/PROVENANCE.md
+
+      - name: Compute Android version metadata
+        id: version
+        run: echo "code=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+
+      - name: Build streaming app and instrumentation APKs
+        working-directory: android
+        env:
+          OPENSTREAM_VERSION_NAME: 1.0.1
+          OPENSTREAM_VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+
+      - name: Normalize APK names
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/openstream-android.apk
+          cp android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk dist/openstream-android-test.apk
+
+      - name: Upload device-test APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-device-e2e-apks
+          path: dist/*.apk
+          if-no-files-found: error
+
+  device-e2e:
+    name: 4K30 + microphone over SRT
+    needs: build-apks
+    runs-on: [self-hosted, linux, openstream-device-lab]
+    timeout-minutes: 12
+    env:
+      OPENSTREAM_ANDROID_ADB_ENDPOINT: ${{ vars.OPENSTREAM_ANDROID_ADB_ENDPOINT }}
+      STREAM_BITRATE_MBPS: ${{ inputs.stream_bitrate_mbps || '8' }}
+      CAPABILITY_BITRATE_MBPS: ${{ inputs.capability_bitrate_mbps || '30' }}
+      DURATION_SECONDS: ${{ inputs.duration_seconds || '15' }}
+      LATENCY_MS: ${{ inputs.latency_ms || '2000' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download app + instrumentation APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: phase3-device-e2e-apks
+          path: dist
+
+      - name: Resolve T1 and T2 topology
+        id: topology
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${OPENSTREAM_ANDROID_ADB_ENDPOINT:-}" ]]; then
+            echo "Repository variable OPENSTREAM_ANDROID_ADB_ENDPOINT chưa được cấu hình." >&2
+            exit 1
+          fi
+
+          receiver_host="$(tailscale ip -4 | head -n 1 | tr -d '[:space:]')"
+          if [[ -z "$receiver_host" ]]; then
+            echo "Không lấy được Tailscale IPv4 của T2." >&2
+            exit 1
+          fi
+
+          adb connect "$OPENSTREAM_ANDROID_ADB_ENDPOINT"
+          state="$(adb -s "$OPENSTREAM_ANDROID_ADB_ENDPOINT" get-state | tr -d '[:space:]')"
+          if [[ "$state" != "device" ]]; then
+            echo "T1 chưa sẵn sàng qua ADB: $state" >&2
+            exit 1
+          fi
+
+          echo "adb_serial=$OPENSTREAM_ANDROID_ADB_ENDPOINT" >> "$GITHUB_OUTPUT"
+          echo "receiver_host=$receiver_host" >> "$GITHUB_OUTPUT"
+          echo "Đã xác nhận T1 qua remote ADB và T2 có Tailscale IPv4."
+
+      - name: Verify Linux lab prerequisites
+        run: |
+          set -euo pipefail
+          python3 --version
+          adb version
+          tailscale version | head -n 1
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+          ffmpeg -hide_banner -protocols | grep -w srt >/dev/null
+          python3 -m py_compile tools/phase3_device_e2e.py
+
+      - name: Reset previous OpenStream packages on T1
+        shell: bash
+        run: |
+          set -euo pipefail
+          serial='${{ steps.topology.outputs.adb_serial }}'
+          echo "Trạng thái package trước khi reset:"
+          adb -s "$serial" shell pm path dev.openstream.app || true
+          adb -s "$serial" shell pm path dev.openstream.app.test || true
+
+          adb -s "$serial" shell am force-stop dev.openstream.app || true
+          adb -s "$serial" shell am force-stop dev.openstream.app.test || true
+
+          # Device lab phải bắt đầu từ trạng thái sạch để tránh xung đột chữ ký
+          # hoặc version từ APK OpenStream đã từng được cài thủ công trước đó.
+          adb -s "$serial" uninstall dev.openstream.app.test || true
+          adb -s "$serial" uninstall dev.openstream.app || true
+
+          if adb -s "$serial" shell pm path dev.openstream.app | grep -q '^package:'; then
+            echo "Không thể gỡ dev.openstream.app khỏi T1; dừng để tránh nghiệm thu trên APK cũ." >&2
+            exit 1
+          fi
+          if adb -s "$serial" shell pm path dev.openstream.app.test | grep -q '^package:'; then
+            echo "Không thể gỡ dev.openstream.app.test khỏi T1; dừng để tránh instrumentation cũ." >&2
+            exit 1
+          fi
+
+      - name: Run Phase 3 device acceptance
+        run: |
+          set -euo pipefail
+          python3 tools/phase3_device_e2e.py \
+            --adb-serial '${{ steps.topology.outputs.adb_serial }}' \
+            --receiver-host '${{ steps.topology.outputs.receiver_host }}' \
+            --app-apk dist/openstream-android.apk \
+            --test-apk dist/openstream-android-test.apk \
+            --receiver-port 19000 \
+            --stream-bitrate-mbps "$STREAM_BITRATE_MBPS" \
+            --capability-bitrate-mbps "$CAPABILITY_BITRATE_MBPS" \
+            --duration-seconds "$DURATION_SECONDS" \
+            --latency-ms "$LATENCY_MS" \
+            --evidence-dir build/phase3-device-e2e
+
+      - name: Stop test app
+        if: always()
+        run: |
+          adb -s '${{ steps.topology.outputs.adb_serial }}' shell am force-stop dev.openstream.app || true
+
+      - name: Upload Phase 3 device evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-device-e2e-evidence
+          path: build/phase3-device-e2e
+          if-no-files-found: warn

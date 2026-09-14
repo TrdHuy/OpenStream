@@ -80,6 +80,7 @@ class MainActivity : Activity() {
     @Volatile private var reservedSlotLabel: String? = null
     @Volatile private var listenerThread: Thread? = null
     @Volatile private var callerConnectThread: Thread? = null
+    @Volatile private var callerModeActive = false
     @Volatile private var callerGeneration = 0L
     @Volatile private var pendingListenerStart = false
     @Volatile private var listenerGeneration = 0L
@@ -651,6 +652,7 @@ class MainActivity : Activity() {
         // Caller mode and listener mode share one native SRT transport. Fully
         // stop the listener before opening a manual caller connection.
         stopPhoneServer(clearReservation = true, updateStatus = false)
+        callerModeActive = true
         useStreamBitrate(target.bitrateMbps)
         statusText.text = "Connecting…"
         statusDetail.text = "${currentLens.displayName} → ${target.name}"
@@ -683,6 +685,7 @@ class MainActivity : Activity() {
                     if (callerGeneration == generation) {
                         streamClient.disconnect()
                         stopActiveEncoding(updateStatus = false)
+                        callerModeActive = false
                     }
                 }
                 mainHandler.post {
@@ -715,6 +718,7 @@ class MainActivity : Activity() {
     }
 
     private fun startPhoneServerIfAllowed() {
+        if (callerModeActive) return
         if (phoneServerRunning) return
         if (listenerThread?.isAlive == true) {
             pendingListenerStart = true
@@ -823,6 +827,7 @@ class MainActivity : Activity() {
         clearReservation: Boolean = true,
         updateStatus: Boolean = true,
     ) {
+        callerModeActive = false
         callerGeneration += 1
         callerConnectThread?.interrupt()
         pendingListenerStart = false
@@ -852,6 +857,7 @@ class MainActivity : Activity() {
     }
 
     private fun stopStream(updateStatus: Boolean = true) {
+        callerModeActive = false
         callerGeneration += 1
         callerConnectThread?.interrupt()
         activeTargetName = null

@@ -1,0 +1,121 @@
+name: Refresh Android SRT
+
+on:
+  push:
+    branches:
+      - phase-3-4k30-mic-path
+    paths:
+      - .github/workflows/refresh-android-srt.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-srt:
+    name: Rebuild bundled SRT for Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SRT_COMMIT: bab403744b4d02005b03dac12a79988bc4590038
+      ANDROID_NDK_VERSION: 27.0.12077973
+    steps:
+      - name: Check out Phase 3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-3-4k30-mic-path
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: sdkmanager "cmake;3.22.1" "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Fetch pinned SRT source
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/openstream-srt-src
+          git clone --filter=blob:none https://github.com/Haivision/srt.git /tmp/openstream-srt-src
+          git -C /tmp/openstream-srt-src checkout "$SRT_COMMIT"
+          test "$(git -C /tmp/openstream-srt-src rev-parse HEAD)" = "$SRT_COMMIT"
+
+      - name: Build static SRT for Android ABIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk="$ANDROID_SDK_ROOT/ndk/$ANDROID_NDK_VERSION"
+          cmake_bin="$ANDROID_SDK_ROOT/cmake/3.22.1/bin/cmake"
+          rm -rf /tmp/openstream-srt-build /tmp/openstream-srt-install
+
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            build="/tmp/openstream-srt-build/$abi"
+            install="/tmp/openstream-srt-install/$abi"
+            "$cmake_bin" \
+              -S /tmp/openstream-srt-src \
+              -B "$build" \
+              -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
+              -DANDROID_ABI="$abi" \
+              -DANDROID_PLATFORM=android-29 \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$install" \
+              -DENABLE_SHARED=OFF \
+              -DENABLE_STATIC=ON \
+              -DENABLE_APPS=OFF \
+              -DENABLE_ENCRYPTION=OFF \
+              -DENABLE_STDCXX_SYNC=ON \
+              -DENABLE_HEAVY_LOGGING=OFF \
+              -DENABLE_LOGGING=ON
+            "$cmake_bin" --build "$build" --parallel 2
+            "$cmake_bin" --install "$build"
+            test -f "$install/lib/libsrt.a"
+          done
+
+      - name: Replace bundled SRT artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="android/app/src/main/cpp/third_party/srt"
+
+          rm -rf "$root/include"
+          cp -R /tmp/openstream-srt-install/arm64-v8a/include "$root/include"
+
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            mkdir -p "$root/lib/$abi"
+            cp "/tmp/openstream-srt-install/$abi/lib/libsrt.a" "$root/lib/$abi/libsrt.a"
+          done
+
+          cat > "$root/PROVENANCE.md" <<EOF
+          # Bundled SRT provenance
+
+          - Upstream: Haivision/srt
+          - Commit: ${SRT_COMMIT}
+          - Release line: v1.5.5-rc.0a
+          - Android NDK: ${ANDROID_NDK_VERSION}
+          - Android API: 29
+          - Static library: enabled
+          - Shared library: disabled
+          - Encryption: disabled (matches the current OpenStream Phase 3 transport scope)
+          - stdc++ synchronization: enabled
+
+          This revision includes upstream PR #3109, which removes the packet-filter
+          static-initialization-order failure observed when loading the previous SRT 1.5.4
+          archive on Android.
+          EOF
+
+          grep -q 'SRT_VERSION_MINOR 5' "$root/include/srt/version.h"
+          ls -lh "$root"/lib/*/libsrt.a
+
+      - name: Commit refreshed Android SRT bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/cpp/third_party/srt
+          if git diff --cached --quiet; then
+            echo "Bundled SRT is already current."
+            exit 0
+          fi
+          git commit -m "build: cập nhật SRT Android để sửa lỗi khởi tạo tĩnh"
+          git push origin HEAD:phase-3-4k30-mic-path

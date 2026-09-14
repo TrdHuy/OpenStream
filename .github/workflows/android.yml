@@ -47,28 +47,32 @@ jobs:
           python -m pip install --disable-pip-version-check pytest
           python -m pytest -q
 
-      - name: Run Android unit tests and lint, then build APK
+      - name: Run Android unit tests and lint, then build app + instrumentation APKs
         working-directory: android
         env:
           OPENSTREAM_VERSION_NAME: 1.0.1
           OPENSTREAM_VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           chmod +x ./gradlew
-          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
 
       - name: Normalize Android build assets
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/debug/app-debug.apk dist/openstream-android.apk
+          cp android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk dist/openstream-android-test.apk
           (cd dist && sha256sum openstream-android.apk > openstream-android.apk.sha256)
+          (cd dist && sha256sum openstream-android-test.apk > openstream-android-test.apk.sha256)
           printf 'debug-signed\n' > dist/android-signing.txt
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: openstream-android-debug-apk
           path: |
             dist/openstream-android.apk
             dist/openstream-android.apk.sha256
+            dist/openstream-android-test.apk
+            dist/openstream-android-test.apk.sha256
             dist/android-signing.txt
           if-no-files-found: error

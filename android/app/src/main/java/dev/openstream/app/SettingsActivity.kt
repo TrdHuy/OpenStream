@@ -180,9 +180,23 @@ class SettingsActivity : Activity() {
         inputWidth.setText(mode.width.toString())
         inputHeight.setText(mode.height.toString())
         inputFps.setText(mode.fps.toString())
+
+        val is4k30 = mode.width >= 3840 && mode.height >= 2160 && mode.fps == 30
+        if (is4k30) {
+            val bitrate = inputBitrateMbps.text.toString().toIntOrNull()
+            if (bitrate == null || bitrate !in 20..40) {
+                inputBitrateMbps.setText("30")
+            }
+            val keyframe = inputKeyframeInterval.text.toString().toIntOrNull()
+            if (keyframe == null || keyframe == 1) {
+                inputKeyframeInterval.setText("2")
+            }
+        }
+
         capabilityNote.text = buildString {
             append("Camera ID ${mode.cameraId} · H.264 phần cứng")
             if (mode.highProfileAvailable) append(" · High Profile khả dụng")
+            if (is4k30) append(" · gợi ý 30 Mbps / keyframe 2 giây")
         }
     }
 

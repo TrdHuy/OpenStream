@@ -23,7 +23,8 @@ def _block_after(source: str, marker: str) -> str:
 def test_optional_video_tuning_has_core_profile_fallback():
     configure = _block_after(SOURCE, "private fun createConfiguredEncoder")
     assert "for (applyOptionalTuning in listOf(true, false))" in configure
-    assert "createVideoFormat(applyOptionalTuning)" in configure
+    assert "createVideoFormat(" in configure
+    assert "applyOptionalTuning" in configure
     assert "runCatching { encoder.release() }" in configure
     assert "if (!applyOptionalTuning)" in configure
     assert "throw error" in configure
@@ -47,3 +48,11 @@ def test_optional_video_tuning_has_core_profile_fallback():
         "MediaFormat.KEY_BITRATE_MODE",
     ):
         assert required_key in video_format
+
+
+def test_4k_avc_high_profile_is_capability_gated_and_observable():
+    assert "AVCProfileHigh" in SOURCE
+    assert "supportsAvcHighProfile" in SOURCE
+    assert "MediaFormat.KEY_PROFILE" in SOURCE
+    assert "actualOutputProfile" in SOURCE
+    assert "onOutputFormatChanged" in SOURCE
