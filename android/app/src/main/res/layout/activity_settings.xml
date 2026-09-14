@@ -53,7 +53,7 @@
             android:id="@+id/settingsCapabilityNote"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Chỉ các tổ hợp Camera2 + AVC phần cứng hợp lệ mới xuất hiện. Chọn cùng ống kính ở màn hình camera khi phát."
+            android:text="Chỉ các tổ hợp Camera2 + AVC phần cứng hợp lệ mới xuất hiện."
             android:textColor="@color/os_text_tertiary"
             android:textSize="12sp"
             android:layout_marginBottom="16dp" />
@@ -83,7 +83,7 @@
             android:id="@+id/settingsBitrateMbps"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Tốc độ bit hình (Mbps), ví dụ 12"
+            android:hint="Tốc độ bit hình (Mbps)"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:inputType="number"
@@ -91,6 +91,33 @@
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:singleLine="true"
+            android:layout_marginBottom="12dp" />
+
+        <Spinner
+            android:id="@+id/settingsVideoBitrateMode"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_minimal_input"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginBottom="12dp" />
+
+        <Spinner
+            android:id="@+id/settingsAvcProfile"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_minimal_input"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:layout_marginBottom="12dp" />
+
+        <CheckBox
+            android:id="@+id/settingsBFrames"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Yêu cầu B-frame nếu bộ mã hóa cho phép"
+            android:textColor="@color/os_text_primary"
+            android:textSize="16sp"
             android:layout_marginBottom="12dp" />
 
         <EditText

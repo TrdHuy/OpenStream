@@ -45,14 +45,19 @@ def test_optional_video_tuning_has_core_profile_fallback():
         "MediaFormat.KEY_BIT_RATE",
         "MediaFormat.KEY_FRAME_RATE",
         "MediaFormat.KEY_I_FRAME_INTERVAL",
-        "MediaFormat.KEY_BITRATE_MODE",
     ):
         assert required_key in video_format
 
+    # SystemDefault intentionally omits KEY_BITRATE_MODE. CBR/VBR still map to MediaCodec.
+    assert "MediaFormat.KEY_BITRATE_MODE" in video_format
+    assert "mediaCodecModeOrNull" in SOURCE
 
-def test_4k_avc_high_profile_is_capability_gated_and_observable():
+
+def test_4k_avc_profiles_and_bframes_are_capability_gated_and_observable():
     assert "AVCProfileHigh" in SOURCE
-    assert "supportsAvcHighProfile" in SOURCE
     assert "MediaFormat.KEY_PROFILE" in SOURCE
     assert "actualOutputProfile" in SOURCE
     assert "onOutputFormatChanged" in SOURCE
+    assert "VideoBitrateMode" in SOURCE
+    assert "AvcProfilePreference" in SOURCE
+    assert "KEY_MAX_B_FRAMES" in SOURCE

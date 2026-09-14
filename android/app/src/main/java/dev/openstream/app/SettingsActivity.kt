@@ -14,6 +14,8 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import dev.openstream.app.camera.CameraLens
+import dev.openstream.app.encoder.AvcProfilePreference
+import dev.openstream.app.encoder.VideoBitrateMode
 import dev.openstream.app.stream.ConnectionTarget
 import dev.openstream.app.stream.StreamConfig
 import dev.openstream.app.stream.StreamConfigStore
@@ -29,6 +31,9 @@ class SettingsActivity : Activity() {
     private lateinit var inputHeight: EditText
     private lateinit var inputFps: EditText
     private lateinit var inputBitrateMbps: EditText
+    private lateinit var inputVideoBitrateMode: Spinner
+    private lateinit var inputAvcProfile: Spinner
+    private lateinit var inputBFrames: CheckBox
     private lateinit var inputKeyframeInterval: EditText
     private lateinit var inputAudioEnabled: CheckBox
     private lateinit var inputAudioSampleRate: EditText
@@ -59,6 +64,9 @@ class SettingsActivity : Activity() {
         inputHeight = findViewById(R.id.settingsHeight)
         inputFps = findViewById(R.id.settingsFps)
         inputBitrateMbps = findViewById(R.id.settingsBitrateMbps)
+        inputVideoBitrateMode = findViewById(R.id.settingsVideoBitrateMode)
+        inputAvcProfile = findViewById(R.id.settingsAvcProfile)
+        inputBFrames = findViewById(R.id.settingsBFrames)
         inputKeyframeInterval = findViewById(R.id.settingsKeyframeInterval)
         inputAudioEnabled = findViewById(R.id.settingsAudioEnabled)
         inputAudioSampleRate = findViewById(R.id.settingsAudioSampleRate)
@@ -74,6 +82,7 @@ class SettingsActivity : Activity() {
         versionInfo = findViewById(R.id.settingsVersionInfo)
 
         val config = loadSettings()
+        setupEncodingSelectors(config)
         setupCapabilitySelectors(config)
         showVersionInfo()
 
@@ -91,6 +100,7 @@ class SettingsActivity : Activity() {
         inputFps.setText(config.fps.toString())
         inputBitrateMbps.setText(config.bitrateMbps.toString())
         inputKeyframeInterval.setText(config.keyframeIntervalSeconds.toString())
+        inputBFrames.isChecked = config.bFramesEnabled
         inputAudioEnabled.isChecked = config.audioEnabled
         inputAudioSampleRate.setText(config.audioSampleRate.toString())
         inputAudioChannels.setText(config.audioChannelCount.toString())
@@ -105,9 +115,25 @@ class SettingsActivity : Activity() {
         return config
     }
 
+    private fun setupEncodingSelectors(config: StreamConfig) {
+        inputVideoBitrateMode.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            VideoBitrateMode.entries.map { it.displayName },
+        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        inputVideoBitrateMode.setSelection(VideoBitrateMode.entries.indexOf(config.videoBitrateMode))
+
+        inputAvcProfile.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            AvcProfilePreference.entries.map { it.displayName },
+        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        inputAvcProfile.setSelection(AvcProfilePreference.entries.indexOf(config.avcProfilePreference))
+    }
+
     private fun setupCapabilitySelectors(config: StreamConfig) {
         supportedModes = runCatching {
-            StreamingCapabilityResolver(this).resolve(config.bitrate)
+            StreamingCapabilityResolver(this).resolve(config)
         }.getOrElse { error ->
             capabilityNote.text = "Không đọc được khả năng camera/bộ mã hóa: ${error.message ?: "lỗi không xác định"}"
             emptyList()
@@ -118,17 +144,16 @@ class SettingsActivity : Activity() {
             capabilityMode.isEnabled = false
             btnSave.isEnabled = false
             btnSaveAndConnect.isEnabled = false
-            capabilityNote.text = "Không tìm thấy tổ hợp Camera2 + H.264 phần cứng hợp lệ ở tốc độ bit hiện tại."
+            capabilityNote.text = "Không tìm thấy tổ hợp Camera2 + H.264 phần cứng hợp lệ ở cấu hình hiện tại."
             return
         }
 
         capabilityLenses = supportedModes.map { it.lens }.distinct()
-        val lensAdapter = ArrayAdapter(
+        capabilityLens.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
             capabilityLenses.map { it.displayName },
         ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        capabilityLens.adapter = lensAdapter
 
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val savedLens = prefs.getString(KEY_CAPABILITY_LENS, null)
@@ -146,7 +171,6 @@ class SettingsActivity : Activity() {
                 selectedCapabilityLens = lens
                 updateModeSpinner(lens, config)
             }
-
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
         capabilityLens.setSelection(initialLensIndex)
@@ -156,17 +180,15 @@ class SettingsActivity : Activity() {
 
     private fun updateModeSpinner(lens: CameraLens, preferred: StreamConfig) {
         visibleModes = supportedModes.filter { it.lens == lens }
-        val modeAdapter = ArrayAdapter(
+        capabilityMode.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
             visibleModes.map { it.label },
         ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        capabilityMode.adapter = modeAdapter
         capabilityMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 visibleModes.getOrNull(position)?.let(::applyCapabilityMode)
             }
-
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
         val preferredIndex = visibleModes.indexOfFirst {
@@ -181,22 +203,24 @@ class SettingsActivity : Activity() {
         inputHeight.setText(mode.height.toString())
         inputFps.setText(mode.fps.toString())
 
-        val is4k30 = mode.width >= 3840 && mode.height >= 2160 && mode.fps == 30
-        if (is4k30) {
+        val is4k = mode.width >= 3840 && mode.height >= 2160
+        if (is4k && mode.fps == 30) {
             val bitrate = inputBitrateMbps.text.toString().toIntOrNull()
-            if (bitrate == null || bitrate !in 20..40) {
-                inputBitrateMbps.setText("30")
-            }
+            if (bitrate == null || bitrate !in 20..40) inputBitrateMbps.setText("30")
             val keyframe = inputKeyframeInterval.text.toString().toIntOrNull()
-            if (keyframe == null || keyframe == 1) {
-                inputKeyframeInterval.setText("2")
-            }
+            if (keyframe == null || keyframe == 1) inputKeyframeInterval.setText("2")
+        } else if (is4k && mode.fps >= 60) {
+            val maxMbps = (mode.maxHardwareBitrate ?: 0) / 1_000_000
+            val currentMbps = inputBitrateMbps.text.toString().toIntOrNull() ?: 0
+            if (currentMbps < 35 && maxMbps >= 35) inputBitrateMbps.setText("35")
+            if (inputKeyframeInterval.text.toString().toIntOrNull() == 1) inputKeyframeInterval.setText("2")
         }
 
         capabilityNote.text = buildString {
             append("Camera ID ${mode.cameraId} · H.264 phần cứng")
-            if (mode.highProfileAvailable) append(" · High Profile khả dụng")
-            if (is4k30) append(" · gợi ý 30 Mbps / keyframe 2 giây")
+            if (mode.highProfileAvailable) append(" · High khả dụng")
+            mode.maxHardwareBitrate?.let { append(" · tối đa codec ~${it / 1_000_000} Mbps") }
+            if (is4k && mode.fps >= 60) append(" · 4K60 được capability cho phép")
         }
     }
 
@@ -207,20 +231,31 @@ class SettingsActivity : Activity() {
         val width = validatedNumber(inputWidth, current.width, StreamConfigStore.MIN_WIDTH..StreamConfigStore.MAX_WIDTH, "Chiều rộng") ?: return
         val height = validatedNumber(inputHeight, current.height, StreamConfigStore.MIN_HEIGHT..StreamConfigStore.MAX_HEIGHT, "Chiều cao") ?: return
         val fps = validatedNumber(inputFps, current.fps, StreamConfigStore.MIN_FPS..StreamConfigStore.MAX_FPS, "Số hình/giây") ?: return
-        val bitrateMbps = validatedNumber(inputBitrateMbps, current.bitrateMbps, StreamConfig.MIN_BITRATE_MBPS..StreamConfig.MAX_BITRATE_MBPS, "Tốc độ bit") ?: return
+        val bitrateMbps = validatedNumber(
+            inputBitrateMbps,
+            current.bitrateMbps,
+            StreamConfig.MIN_CONFIGURABLE_BITRATE_MBPS..StreamConfig.MAX_CONFIGURABLE_BITRATE_MBPS,
+            "Tốc độ bit",
+        ) ?: return
         val keyframeInterval = validatedNumber(inputKeyframeInterval, current.keyframeIntervalSeconds, StreamConfigStore.MIN_KEYFRAME_INTERVAL..StreamConfigStore.MAX_KEYFRAME_INTERVAL, "Chu kỳ khung hình khóa") ?: return
         val audioSampleRate = validatedNumber(inputAudioSampleRate, current.audioSampleRate, StreamConfigStore.MIN_AUDIO_SAMPLE_RATE..StreamConfigStore.MAX_AUDIO_SAMPLE_RATE, "Tần số lấy mẫu âm thanh") ?: return
         val audioChannels = validatedNumber(inputAudioChannels, current.audioChannelCount, StreamConfigStore.MIN_AUDIO_CHANNELS..StreamConfigStore.MAX_AUDIO_CHANNELS, "Số kênh âm thanh") ?: return
         val audioBitrateKbps = validatedNumber(inputAudioBitrateKbps, current.audioBitrateKbps, StreamConfigStore.MIN_AUDIO_BITRATE_KBPS..StreamConfigStore.MAX_AUDIO_BITRATE_KBPS, "Tốc độ bit âm thanh") ?: return
+        val bitrateMode = VideoBitrateMode.entries[inputVideoBitrateMode.selectedItemPosition.coerceIn(0, VideoBitrateMode.entries.lastIndex)]
+        val avcProfile = AvcProfilePreference.entries[inputAvcProfile.selectedItemPosition.coerceIn(0, AvcProfilePreference.entries.lastIndex)]
 
         val lens = selectedCapabilityLens
-        val validAtRequestedBitrate = lens != null && runCatching {
-            StreamingCapabilityResolver(this).resolve(bitrateMbps * 1_000_000).any {
+        val validAtRequestedSettings = lens != null && runCatching {
+            StreamingCapabilityResolver(this).resolve(
+                bitrate = bitrateMbps * 1_000_000,
+                bitrateMode = bitrateMode,
+                profilePreference = avcProfile,
+            ).any {
                 it.lens == lens && it.width == width && it.height == height && it.fps == fps
             }
         }.getOrDefault(false)
-        if (!validAtRequestedBitrate) {
-            inputBitrateMbps.error = "Tổ hợp ống kính/độ phân giải/FPS này không hợp lệ ở tốc độ bit đã chọn"
+        if (!validAtRequestedSettings) {
+            inputBitrateMbps.error = "Tổ hợp ống kính/độ phân giải/FPS/bitrate/profile này không được codec phần cứng hỗ trợ"
             return
         }
 
@@ -241,6 +276,9 @@ class SettingsActivity : Activity() {
             bitrate = bitrateMbps * 1_000_000,
             keyframeIntervalSeconds = keyframeInterval,
             latencyMs = latency,
+            videoBitrateMode = bitrateMode,
+            avcProfilePreference = avcProfile,
+            bFramesEnabled = inputBFrames.isChecked,
             audioEnabled = inputAudioEnabled.isChecked,
             audioSampleRate = audioSampleRate,
             audioChannelCount = audioChannels,

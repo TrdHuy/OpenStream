@@ -53,14 +53,43 @@ class HardwareVideoCapabilityProbe {
     }
 
     fun supportsAvc(width: Int, height: Int, fps: Int, bitrate: Int): Boolean {
+        return supportsAvc(
+            width = width,
+            height = height,
+            fps = fps,
+            bitrate = bitrate,
+            bitrateMode = VideoBitrateMode.Cbr,
+            profilePreference = AvcProfilePreference.Auto,
+        )
+    }
+
+    fun supportsAvc(
+        width: Int,
+        height: Int,
+        fps: Int,
+        bitrate: Int,
+        bitrateMode: VideoBitrateMode,
+        profilePreference: AvcProfilePreference,
+    ): Boolean {
         return avcCandidates.any { candidate ->
             val video = candidate.capabilities.videoCapabilities
-            runCatching {
+            val encoder = candidate.capabilities.encoderCapabilities
+            val requestedProfile = profilePreference.toCodecProfileOrNull()
+            val profileSupported = requestedProfile == null || candidate.capabilities.profileLevels.any {
+                it.profile == requestedProfile
+            }
+            val bitrateModeSupported = when (bitrateMode) {
+                VideoBitrateMode.SystemDefault -> true
+                VideoBitrateMode.Cbr -> encoder.isBitrateModeSupported(
+                    MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR,
+                )
+                VideoBitrateMode.Vbr -> encoder.isBitrateModeSupported(
+                    MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR,
+                )
+            }
+            profileSupported && bitrateModeSupported && runCatching {
                 video.areSizeAndRateSupported(width, height, fps.toDouble()) &&
-                    video.bitrateRange.contains(bitrate) &&
-                    candidate.capabilities.encoderCapabilities.isBitrateModeSupported(
-                        MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR,
-                    )
+                    video.bitrateRange.contains(bitrate)
             }.getOrDefault(false)
         }
     }
@@ -78,5 +107,22 @@ class HardwareVideoCapabilityProbe {
                 ) && candidate.capabilities.videoCapabilities.bitrateRange.contains(bitrate)
             }.getOrDefault(false)
         }
+    }
+
+    fun maxBitrateFor(width: Int, height: Int, fps: Int): Int? {
+        return avcCandidates.mapNotNull { candidate ->
+            val video = candidate.capabilities.videoCapabilities
+            val supported = runCatching {
+                video.areSizeAndRateSupported(width, height, fps.toDouble())
+            }.getOrDefault(false)
+            video.bitrateRange.upper.takeIf { supported }
+        }.maxOrNull()
+    }
+
+    private fun AvcProfilePreference.toCodecProfileOrNull(): Int? = when (this) {
+        AvcProfilePreference.Auto -> null
+        AvcProfilePreference.Baseline -> MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline
+        AvcProfilePreference.Main -> MediaCodecInfo.CodecProfileLevel.AVCProfileMain
+        AvcProfilePreference.High -> MediaCodecInfo.CodecProfileLevel.AVCProfileHigh
     }
 }

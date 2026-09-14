@@ -1,6 +1,8 @@
 package dev.openstream.app.stream
 
+import dev.openstream.app.encoder.AvcProfilePreference
 import dev.openstream.app.encoder.CodecPreference
+import dev.openstream.app.encoder.VideoBitrateMode
 
 data class StreamConfig(
     val width: Int,
@@ -10,6 +12,9 @@ data class StreamConfig(
     val keyframeIntervalSeconds: Int,
     val latencyMs: Int,
     val codecPreference: CodecPreference,
+    val videoBitrateMode: VideoBitrateMode,
+    val avcProfilePreference: AvcProfilePreference,
+    val bFramesEnabled: Boolean,
     val audioEnabled: Boolean,
     val audioSampleRate: Int,
     val audioChannelCount: Int,
@@ -22,8 +27,14 @@ data class StreamConfig(
         get() = audioBitrate / 1_000
 
     companion object {
+        // Giữ contract V1.0.1 cho đường điều khiển OBS cũ.
         const val MIN_BITRATE_MBPS = 8
         const val MAX_BITRATE_MBPS = 50
+
+        // Giao diện phát nâng cao không bị khóa ở trần 50 Mbps; giá trị thực tế
+        // vẫn phải được StreamingCapabilityResolver xác nhận với MediaCodec.
+        const val MIN_CONFIGURABLE_BITRATE_MBPS = 1
+        const val MAX_CONFIGURABLE_BITRATE_MBPS = 200
 
         private val baseline1080p30 = StreamConfig(
             width = 1920,
@@ -33,6 +44,9 @@ data class StreamConfig(
             keyframeIntervalSeconds = 1,
             latencyMs = 120,
             codecPreference = CodecPreference.ForceAvc,
+            videoBitrateMode = VideoBitrateMode.Cbr,
+            avcProfilePreference = AvcProfilePreference.Auto,
+            bFramesEnabled = false,
             audioEnabled = true,
             audioSampleRate = 48_000,
             audioChannelCount = 1,
@@ -42,14 +56,9 @@ data class StreamConfig(
         @Volatile
         private var runtimeConfig: StreamConfig? = null
 
-        /** Cấu hình nền cố định để đọc giá trị mặc định khi kho cấu hình chưa có dữ liệu. */
         val Baseline1080p30: StreamConfig
             get() = baseline1080p30
 
-        /**
-         * Giữ API cũ cho MainActivity nhưng không còn khóa luồng vào 1080p30.
-         * OpenStreamApplication nạp cấu hình đã lưu trước khi Activity được tạo.
-         */
         val Default1080p30: StreamConfig
             get() = runtimeConfig ?: baseline1080p30
 
@@ -65,6 +74,9 @@ data class StreamConfig(
             keyframeIntervalSeconds = 1,
             latencyMs = 120,
             codecPreference = CodecPreference.ForceAvc,
+            videoBitrateMode = VideoBitrateMode.Cbr,
+            avcProfilePreference = AvcProfilePreference.Auto,
+            bFramesEnabled = false,
             audioEnabled = true,
             audioSampleRate = 48_000,
             audioChannelCount = 1,

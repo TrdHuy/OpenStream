@@ -3,7 +3,9 @@ package dev.openstream.app.camera
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.media.CamcorderProfile
 import android.media.MediaCodec
+import android.os.Build
 import android.util.Range
 import android.util.Size
 
@@ -64,11 +66,25 @@ class CameraCapabilityProbe(context: Context) {
         val minDurationNs = runCatching {
             map.getOutputMinFrameDuration(MediaCodec::class.java, size)
         }.getOrDefault(0L)
-        val maxFpsFromDuration = if (minDurationNs > 0L) 1_000_000_000.0 / minDurationNs else Double.POSITIVE_INFINITY
+        val maxFpsFromDuration = if (minDurationNs > 0L) {
+            1_000_000_000.0 / minDurationNs
+        } else {
+            Double.POSITIVE_INFINITY
+        }
+
+        // Một số HAL (đã gặp trên Galaxy S25 Edge) báo min-frame-duration bảo thủ
+        // cho surface MediaCodec, dù public CamcorderProfile/EncoderProfiles và một
+        // Camera2 TEMPLATE_RECORD session thực tế vẫn chạy 2160p60. Dùng profile
+        // quay public của Android như nguồn capability thứ hai thay vì hardcode
+        // theo model/vendor; MediaCodec capability vẫn được intersect ở resolver.
+        val publicRecordingMaxFps = publicRecordingProfileMaxFps(cameraId, size)
+
         val candidates = listOf(24, 30, 60)
         return candidates.filter { fps ->
             val aeAllows = aeRanges.isEmpty() || aeRanges.any { fps in it.lower..it.upper }
-            aeAllows && maxFpsFromDuration + 0.5 >= fps
+            val durationAllows = maxFpsFromDuration + 0.5 >= fps
+            val recordingProfileAllows = (publicRecordingMaxFps ?: 0) >= fps
+            aeAllows && (durationAllows || recordingProfileAllows)
         }.map { fps ->
             CameraStreamMode(
                 lens = lens,
@@ -78,6 +94,43 @@ class CameraCapabilityProbe(context: Context) {
                 fps = fps,
             )
         }
+    }
+
+    private fun publicRecordingProfileMaxFps(cameraId: String, size: Size): Int? {
+        val quality = qualityForSize(size) ?: return null
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching {
+                CamcorderProfile.getAll(cameraId, quality)
+                    ?.videoProfiles
+                    ?.asSequence()
+                    ?.filter { profile ->
+                        profile.width == size.width && profile.height == size.height
+                    }
+                    ?.maxOfOrNull { profile -> profile.frameRate }
+            }.getOrNull()
+        } else {
+            val numericCameraId = cameraId.toIntOrNull() ?: return null
+            runCatching {
+                if (!CamcorderProfile.hasProfile(numericCameraId, quality)) {
+                    return@runCatching null
+                }
+                @Suppress("DEPRECATION")
+                CamcorderProfile.get(numericCameraId, quality)
+                    .takeIf { profile ->
+                        profile.videoFrameWidth == size.width &&
+                            profile.videoFrameHeight == size.height
+                    }
+                    ?.videoFrameRate
+            }.getOrNull()
+        }
+    }
+
+    private fun qualityForSize(size: Size): Int? = when {
+        size.width == 3840 && size.height == 2160 -> CamcorderProfile.QUALITY_2160P
+        size.width == 1920 && size.height == 1080 -> CamcorderProfile.QUALITY_1080P
+        size.width == 1280 && size.height == 720 -> CamcorderProfile.QUALITY_720P
+        size.width == 720 && size.height == 480 -> CamcorderProfile.QUALITY_480P
+        else -> null
     }
 
     private fun resolveLensCameraPairs(): List<Pair<CameraLens, String>> {

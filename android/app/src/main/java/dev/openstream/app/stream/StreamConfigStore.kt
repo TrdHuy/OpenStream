@@ -1,12 +1,9 @@
 package dev.openstream.app.stream
 
 import android.content.Context
+import dev.openstream.app.encoder.AvcProfilePreference
+import dev.openstream.app.encoder.VideoBitrateMode
 
-/**
- * Nguồn duy nhất để lưu/khôi phục cấu hình phát. Giai đoạn 1 chủ động dùng
- * SharedPreferences để giữ tương thích với SettingsActivity hiện tại; lớp phát
- * hiện chỉ nhận StreamConfig và không phụ thuộc trực tiếp vào giao diện.
- */
 object StreamConfigStore {
     const val PREFS_NAME = "openstream_settings"
 
@@ -16,6 +13,9 @@ object StreamConfigStore {
     const val KEY_BITRATE_MBPS = "stream_bitrate_mbps"
     const val KEY_KEYFRAME_INTERVAL = "stream_keyframe_interval_seconds"
     const val KEY_LATENCY = "latency_ms"
+    const val KEY_VIDEO_BITRATE_MODE = "video_bitrate_mode"
+    const val KEY_AVC_PROFILE = "avc_profile"
+    const val KEY_B_FRAMES_ENABLED = "b_frames_enabled"
     const val KEY_AUDIO_ENABLED = "audio_enabled"
     const val KEY_AUDIO_SAMPLE_RATE = "audio_sample_rate"
     const val KEY_AUDIO_CHANNEL_COUNT = "audio_channel_count"
@@ -46,13 +46,23 @@ object StreamConfigStore {
             height = prefs.getInt(KEY_HEIGHT, defaults.height).coerceIn(MIN_HEIGHT, MAX_HEIGHT),
             fps = prefs.getInt(KEY_FPS, defaults.fps).coerceIn(MIN_FPS, MAX_FPS),
             bitrate = prefs.getInt(KEY_BITRATE_MBPS, defaults.bitrateMbps)
-                .coerceIn(StreamConfig.MIN_BITRATE_MBPS, StreamConfig.MAX_BITRATE_MBPS) * 1_000_000,
-            keyframeIntervalSeconds = prefs.getInt(
-                KEY_KEYFRAME_INTERVAL,
-                defaults.keyframeIntervalSeconds,
-            ).coerceIn(MIN_KEYFRAME_INTERVAL, MAX_KEYFRAME_INTERVAL),
+                .coerceIn(
+                    StreamConfig.MIN_CONFIGURABLE_BITRATE_MBPS,
+                    StreamConfig.MAX_CONFIGURABLE_BITRATE_MBPS,
+                ) * 1_000_000,
+            keyframeIntervalSeconds = prefs.getInt(KEY_KEYFRAME_INTERVAL, defaults.keyframeIntervalSeconds)
+                .coerceIn(MIN_KEYFRAME_INTERVAL, MAX_KEYFRAME_INTERVAL),
             latencyMs = prefs.getInt(KEY_LATENCY, defaults.latencyMs)
                 .coerceIn(MIN_LATENCY_MS, MAX_LATENCY_MS),
+            videoBitrateMode = enumValueOrDefault(
+                prefs.getString(KEY_VIDEO_BITRATE_MODE, null),
+                defaults.videoBitrateMode,
+            ),
+            avcProfilePreference = enumValueOrDefault(
+                prefs.getString(KEY_AVC_PROFILE, null),
+                defaults.avcProfilePreference,
+            ),
+            bFramesEnabled = prefs.getBoolean(KEY_B_FRAMES_ENABLED, defaults.bFramesEnabled),
             audioEnabled = prefs.getBoolean(KEY_AUDIO_ENABLED, defaults.audioEnabled),
             audioSampleRate = prefs.getInt(KEY_AUDIO_SAMPLE_RATE, defaults.audioSampleRate)
                 .coerceIn(MIN_AUDIO_SAMPLE_RATE, MAX_AUDIO_SAMPLE_RATE),
@@ -72,10 +82,17 @@ object StreamConfigStore {
             .putInt(KEY_BITRATE_MBPS, config.bitrateMbps)
             .putInt(KEY_KEYFRAME_INTERVAL, config.keyframeIntervalSeconds)
             .putInt(KEY_LATENCY, config.latencyMs)
+            .putString(KEY_VIDEO_BITRATE_MODE, config.videoBitrateMode.name)
+            .putString(KEY_AVC_PROFILE, config.avcProfilePreference.name)
+            .putBoolean(KEY_B_FRAMES_ENABLED, config.bFramesEnabled)
             .putBoolean(KEY_AUDIO_ENABLED, config.audioEnabled)
             .putInt(KEY_AUDIO_SAMPLE_RATE, config.audioSampleRate)
             .putInt(KEY_AUDIO_CHANNEL_COUNT, config.audioChannelCount)
             .putInt(KEY_AUDIO_BITRATE_KBPS, config.audioBitrateKbps)
             .apply()
+    }
+
+    private inline fun <reified T : Enum<T>> enumValueOrDefault(raw: String?, fallback: T): T {
+        return raw?.let { value -> runCatching { enumValueOf<T>(value) }.getOrNull() } ?: fallback
     }
 }
