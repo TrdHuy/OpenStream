@@ -21,6 +21,34 @@ int main() {
   }
 
   {
+    // A short scheduling delay must not rewrite the media timeline.
+    MediaClock clock;
+    const int64_t source_origin = 1'000'000'000LL;
+    const uint64_t obs_origin = 10'000'000'000ULL;
+    check(clock.map(source_origin, obs_origin).value() == obs_origin);
+    check(clock.map(source_origin + 50'000'000LL, obs_origin + 150'000'000ULL).value() ==
+          obs_origin + 50'000'000ULL);
+  }
+
+  {
+    // Reproduce the real OBS black-screen failure: decoder startup stalls for
+    // longer than the stale-frame budget while the media timeline advances by
+    // only one frame. Rebase to the live edge and keep subsequent timestamps
+    // aligned instead of dropping forever at real-time speed.
+    MediaClock clock;
+    const int64_t source_origin = 1'000'000'000LL;
+    const uint64_t obs_origin = 10'000'000'000ULL;
+    check(clock.map(source_origin, obs_origin).value() == obs_origin);
+
+    const int64_t source_after_stall = source_origin + 33'000'000LL;
+    const uint64_t obs_after_stall = obs_origin + 400'000'000ULL;
+    check(clock.map(source_after_stall, obs_after_stall).value() == obs_after_stall);
+
+    check(clock.map(source_origin + 66'000'000LL, obs_origin + 433'000'000ULL).value() ==
+          obs_origin + 433'000'000ULL);
+  }
+
+  {
     AsyncControlClient client;
     std::promise<void> started;
     std::promise<void> release;
