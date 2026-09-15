@@ -1,0 +1,170 @@
+name: Phase 7 OBS Artifact Smoke
+
+on:
+  push:
+    branches:
+      - phase-7-larix-ux-release
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase7-obs-artifact-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-plugin:
+    name: Build exact P7 OBS plugin artifact
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install OBS Studio 32.2.1 SDK/runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = "https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Windows-x64.zip"
+          $archive = "$env:RUNNER_TEMP\obs-studio.zip"
+          $destination = "$env:RUNNER_TEMP\obs-studio"
+          & curl.exe -L --fail --retry 3 -o $archive $url
+          if ($LASTEXITCODE -ne 0) { throw "OBS Studio download failed" }
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "db64a2934f8261f85b1410b84be011207a0afda5400d008289f1f1e211bcc7de"
+          if ($actual -ne $expected) { throw "OBS Studio checksum mismatch" }
+          Expand-Archive -Path $archive -DestinationPath $destination
+          "OPENSTREAM_OBS_INSTALL=$destination" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install matching Qt development files
+        shell: powershell
+        run: |
+          python -m pip install --disable-pip-version-check aqtinstall
+          python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O C:\Qt
+          "OPENSTREAM_QT_ROOT=C:\Qt\6.8.3\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build plugin DLL
+        shell: cmd
+        run: |
+          set OPENSTREAM_SKIP_INSTALL=1
+          call build_plugin.bat
+
+      - name: Upload exact DLL under test
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-obs-plugin-dll
+          path: obs-plugin/build/openstream-obs.dll
+          if-no-files-found: error
+
+  real-obs-smoke:
+    name: Load P7 plugin and create source in real OBS
+    needs: build-plugin
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download exact P7 plugin DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: phase7-obs-plugin-dll
+          path: dist/obs-plugin
+
+      - name: Install OBS Studio runtime and plugin
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = "https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Windows-x64.zip"
+          $archive = "$env:RUNNER_TEMP\obs-studio.zip"
+          $destination = "$env:RUNNER_TEMP\obs-studio"
+          & curl.exe -L --fail --retry 3 -o $archive $url
+          if ($LASTEXITCODE -ne 0) { throw "OBS Studio download failed" }
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "db64a2934f8261f85b1410b84be011207a0afda5400d008289f1f1e211bcc7de"
+          if ($actual -ne $expected) { throw "OBS Studio checksum mismatch" }
+          Expand-Archive -Path $archive -DestinationPath $destination
+
+          $plugin = Resolve-Path "dist\obs-plugin\openstream-obs.dll"
+          $pluginDir = Join-Path $destination "obs-plugins\64bit"
+          New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
+          Copy-Item -LiteralPath $plugin -Destination (Join-Path $pluginDir "openstream-obs.dll") -Force
+          "PHASE7_OBS_ROOT=$destination" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Enable local OBS WebSocket control
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $configDir = Join-Path $env:APPDATA "obs-studio\plugin_config\obs-websocket"
+          New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+          @'
+          {
+            "server_enabled": true,
+            "server_port": 4455,
+            "auth_required": false,
+            "first_load": false
+          }
+          '@ | Set-Content -LiteralPath (Join-Path $configDir "config.json") -Encoding utf8
+          python -m pip install --disable-pip-version-check obsws-python
+
+      - name: Start real OBS, verify plugin, and create P7 source
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $obsExe = Join-Path $env:PHASE7_OBS_ROOT "bin\64bit\obs64.exe"
+          if (!(Test-Path -LiteralPath $obsExe)) { throw "OBS executable missing: $obsExe" }
+
+          $obs = Start-Process -FilePath $obsExe -WorkingDirectory (Split-Path -Parent $obsExe) -ArgumentList @('--multi','--disable-shutdown-check','--minimize-to-tray') -PassThru
+          try {
+            $logRoot = Join-Path $env:APPDATA "obs-studio\logs"
+            $deadline = (Get-Date).AddSeconds(45)
+            $obsLog = $null
+            while ((Get-Date) -lt $deadline) {
+              if ($obs.HasExited) { throw "OBS exited during startup with code $($obs.ExitCode)" }
+              $obsLog = Get-ChildItem -LiteralPath $logRoot -Filter '*.txt' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+              if ($obsLog -and (Select-String -LiteralPath $obsLog.FullName -SimpleMatch '[OpenStream] OBS plugin loaded' -Quiet)) { break }
+              Start-Sleep -Seconds 1
+            }
+            if (!$obsLog -or !(Select-String -LiteralPath $obsLog.FullName -SimpleMatch '[OpenStream] OBS plugin loaded' -Quiet)) {
+              if ($obsLog) { Get-Content -LiteralPath $obsLog.FullName -Tail 120 | Write-Host }
+              throw 'OBS started but did not load the OpenStream plugin built by this Phase 7 run'
+            }
+
+            $createSource = @'
+          import time
+          import obsws_python as obs
+
+          deadline = time.time() + 30
+          client = None
+          while time.time() < deadline:
+              try:
+                  client = obs.ReqClient(host="127.0.0.1", port=4455, timeout=3)
+                  client.get_version()
+                  break
+              except Exception:
+                  time.sleep(1)
+          if client is None:
+              raise SystemExit("OBS WebSocket did not become ready")
+
+          scene = "Phase7"
+          source = "OpenStream Phase7"
+          try:
+              client.create_scene(scene)
+          except Exception:
+              pass
+          client.create_input(
+              scene,
+              source,
+              "openstream_phone_v8_source",
+              {"listener_enabled": True, "listener_port": 9000, "latency_ms": 120, "bitrate_mbps": 8},
+              True,
+          )
+          client.set_current_program_scene(scene)
+          print("Created real OBS OpenStream source for Phase 7")
+          '@
+            $createSource | python -
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create OpenStream source in real OBS' }
+          } finally {
+            Stop-Process -Id $obs.Id -Force -ErrorAction SilentlyContinue
+          }

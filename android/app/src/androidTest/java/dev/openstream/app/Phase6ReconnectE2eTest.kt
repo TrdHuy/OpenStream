@@ -121,7 +121,9 @@ class Phase6ReconnectE2eTest {
         SystemClock.sleep(PREVIEW_WARMUP_MS)
 
         val connectIntent = Intent(Intent.ACTION_VIEW, targetUri, context, MainActivity::class.java)
-        instrumentation.callActivityOnNewIntent(activity, connectIntent)
+        instrumentation.runOnMainSync {
+            instrumentation.callActivityOnNewIntent(activity, connectIntent)
+        }
         instrumentation.waitForIdleSync()
 
         assertTrue(

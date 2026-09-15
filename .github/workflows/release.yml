@@ -31,13 +31,17 @@ jobs:
           python-version: "3.12"
 
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Legacy package `tools` is no longer published by current sdkmanager.
+          # Install only the exact packages required by the release build below.
+          packages: ""
 
       - name: Install Android build packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.0.12077973"
@@ -133,7 +137,7 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check aqtinstall
           python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O C:\Qt
-          "OPENSTREAM_QT_ROOT=C:\Qt\6.8.3\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OPENSTREAM_QT_ROOT=C:\Qt\6.8.3\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build plugin package
         shell: cmd
@@ -228,4 +232,3 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "OpenStream ${TAG_NAME}" \
             --notes-file docs/release-notes-template.md
-

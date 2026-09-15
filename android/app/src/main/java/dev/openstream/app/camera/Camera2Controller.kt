@@ -15,6 +15,7 @@ import android.os.HandlerThread
 import android.util.Log
 import android.util.Range
 import android.view.Surface
+import android.view.SurfaceHolder
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -344,6 +345,11 @@ class Camera2Controller(
 
     private fun loadZoomCapabilities(cameraId: String) {
         val chars = cameraManager.getCameraCharacteristics(cameraId)
+        val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+        Log.i(
+            TAG,
+            "Camera $cameraId PRIV output sizes: ${map?.getOutputSizes(SurfaceHolder::class.java)?.joinToString()}",
+        )
         val availableFpsRanges = chars
             .get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
             .orEmpty()

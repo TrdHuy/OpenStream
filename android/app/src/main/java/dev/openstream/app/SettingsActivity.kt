@@ -19,11 +19,23 @@ import dev.openstream.app.encoder.VideoBitrateMode
 import dev.openstream.app.stream.ConnectionTarget
 import dev.openstream.app.stream.StreamConfig
 import dev.openstream.app.stream.StreamConfigStore
+import dev.openstream.app.stream.StreamPreset
+import dev.openstream.app.stream.StreamProfile
+import dev.openstream.app.stream.StreamProfileStore
 import dev.openstream.app.stream.StreamingCapabilityResolver
 import dev.openstream.app.stream.SupportedStreamMode
+import java.util.UUID
 
 class SettingsActivity : Activity() {
 
+    private lateinit var profileSpinner: Spinner
+    private lateinit var profileName: EditText
+    private lateinit var btnNewProfile: TextView
+    private lateinit var btnUseProfile: TextView
+    private lateinit var btnSaveProfile: TextView
+    private lateinit var btnDeleteProfile: TextView
+    private lateinit var presetSpinner: Spinner
+    private lateinit var presetNote: TextView
     private lateinit var capabilityLens: Spinner
     private lateinit var capabilityMode: Spinner
     private lateinit var capabilityNote: TextView
@@ -52,11 +64,22 @@ class SettingsActivity : Activity() {
     private var visibleModes: List<SupportedStreamMode> = emptyList()
     private var capabilityLenses: List<CameraLens> = emptyList()
     private var selectedCapabilityLens: CameraLens? = null
+    private var profiles: List<StreamProfile> = emptyList()
+    private var selectedProfileId: String? = null
+    private var presetOptions: List<PresetOption> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
 
+        profileSpinner = findViewById(R.id.settingsProfile)
+        profileName = findViewById(R.id.settingsProfileName)
+        btnNewProfile = findViewById(R.id.btnNewProfile)
+        btnUseProfile = findViewById(R.id.btnUseProfile)
+        btnSaveProfile = findViewById(R.id.btnSaveProfile)
+        btnDeleteProfile = findViewById(R.id.btnDeleteProfile)
+        presetSpinner = findViewById(R.id.settingsPreset)
+        presetNote = findViewById(R.id.settingsPresetNote)
         capabilityLens = findViewById(R.id.settingsCapabilityLens)
         capabilityMode = findViewById(R.id.settingsCapabilityMode)
         capabilityNote = findViewById(R.id.settingsCapabilityNote)
@@ -81,11 +104,20 @@ class SettingsActivity : Activity() {
         btnBack = findViewById(R.id.btnBackSettings)
         versionInfo = findViewById(R.id.settingsVersionInfo)
 
+        profileName.hint = "Tên profile (chỉ cần khi muốn lưu profile)"
+        btnUseProfile.text = "Áp dụng"
+        btnSaveProfile.text = "Lưu profile"
+
         val config = loadSettings()
         setupEncodingSelectors(config)
         setupCapabilitySelectors(config)
+        setupProfiles()
         showVersionInfo()
 
+        btnNewProfile.setOnClickListener { beginNewProfile() }
+        btnUseProfile.setOnClickListener { useSelectedProfile() }
+        btnSaveProfile.setOnClickListener { saveCurrentProfile() }
+        btnDeleteProfile.setOnClickListener { deleteSelectedProfile() }
         btnSave.setOnClickListener { saveSettings(connectAfterSave = false) }
         btnSaveAndConnect.setOnClickListener { saveSettings(connectAfterSave = true) }
         btnBack.setOnClickListener { finish() }
@@ -94,17 +126,7 @@ class SettingsActivity : Activity() {
     private fun loadSettings(): StreamConfig {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val config = StreamConfigStore.load(this)
-
-        inputWidth.setText(config.width.toString())
-        inputHeight.setText(config.height.toString())
-        inputFps.setText(config.fps.toString())
-        inputBitrateMbps.setText(config.bitrateMbps.toString())
-        inputKeyframeInterval.setText(config.keyframeIntervalSeconds.toString())
-        inputBFrames.isChecked = config.bFramesEnabled
-        inputAudioEnabled.isChecked = config.audioEnabled
-        inputAudioSampleRate.setText(config.audioSampleRate.toString())
-        inputAudioChannels.setText(config.audioChannelCount.toString())
-        inputAudioBitrateKbps.setText(config.audioBitrateKbps.toString())
+        applyConfigToInputs(config)
 
         inputObsHost.setText(prefs.getString(KEY_OBS_HOST, ""))
         val port = prefs.getInt(KEY_OBS_PORT, ConnectionTarget.DEFAULT_PORT)
@@ -115,39 +137,82 @@ class SettingsActivity : Activity() {
         return config
     }
 
+    private fun applyConfigToInputs(config: StreamConfig) {
+        inputWidth.setText(config.width.toString())
+        inputHeight.setText(config.height.toString())
+        inputFps.setText(config.fps.toString())
+        inputBitrateMbps.setText(config.bitrateMbps.toString())
+        inputKeyframeInterval.setText(config.keyframeIntervalSeconds.toString())
+        inputBFrames.isChecked = config.bFramesEnabled
+        inputAudioEnabled.isChecked = config.audioEnabled
+        inputAudioSampleRate.setText(config.audioSampleRate.toString())
+        inputAudioChannels.setText(config.audioChannelCount.toString())
+        inputAudioBitrateKbps.setText(config.audioBitrateKbps.toString())
+    }
+
     private fun setupEncodingSelectors(config: StreamConfig) {
         inputVideoBitrateMode.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
             VideoBitrateMode.entries.map { it.displayName },
         ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        inputVideoBitrateMode.setSelection(VideoBitrateMode.entries.indexOf(config.videoBitrateMode))
+        inputVideoBitrateMode.setSelection(VideoBitrateMode.entries.indexOf(config.videoBitrateMode).coerceAtLeast(0))
 
         inputAvcProfile.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
             AvcProfilePreference.entries.map { it.displayName },
         ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        inputAvcProfile.setSelection(AvcProfilePreference.entries.indexOf(config.avcProfilePreference))
+        inputAvcProfile.setSelection(AvcProfilePreference.entries.indexOf(config.avcProfilePreference).coerceAtLeast(0))
     }
 
-    private fun setupCapabilitySelectors(config: StreamConfig) {
+    private fun setupCapabilitySelectors(config: StreamConfig, preferredLens: CameraLens? = null) {
+        val resolver = StreamingCapabilityResolver(this)
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val savedLens = prefs.getString(KEY_CAPABILITY_LENS, null)
+            ?.let { name -> runCatching { CameraLens.valueOf(name) }.getOrNull() }
+
+        var capabilityReadError: String? = null
         supportedModes = runCatching {
-            StreamingCapabilityResolver(this).resolve(config)
+            resolver.resolve(config)
         }.getOrElse { error ->
-            capabilityNote.text = "Không đọc được khả năng camera/bộ mã hóa: ${error.message ?: "lỗi không xác định"}"
+            capabilityReadError = error.message ?: "lỗi không xác định"
             emptyList()
         }
 
+        val usingRecoveryModes = supportedModes.isEmpty()
+        if (usingRecoveryModes) {
+            val recoveryConfig = config.copy(
+                bitrate = StreamConfig.Baseline1080p30.bitrate,
+                videoBitrateMode = VideoBitrateMode.Cbr,
+                avcProfilePreference = AvcProfilePreference.Auto,
+            )
+            supportedModes = runCatching { resolver.resolve(recoveryConfig) }.getOrDefault(emptyList())
+        }
+
+        // Không khóa nút lưu chỉ vì cấu hình cũ đang unsupported. Người dùng phải
+        // luôn có đường sửa cấu hình rồi lưu lại; readValidatedSettings() sẽ kiểm
+        // chính cấu hình mới tại thời điểm bấm Lưu/Lưu & kết nối.
+        btnSave.isEnabled = true
+        btnSaveAndConnect.isEnabled = true
+
         if (supportedModes.isEmpty()) {
+            selectedCapabilityLens = preferredLens ?: savedLens ?: CameraLens.Back
             capabilityLens.isEnabled = false
             capabilityMode.isEnabled = false
-            btnSave.isEnabled = false
-            btnSaveAndConnect.isEnabled = false
-            capabilityNote.text = "Không tìm thấy tổ hợp Camera2 + H.264 phần cứng hợp lệ ở cấu hình hiện tại."
+            presetSpinner.isEnabled = false
+            capabilityNote.text = if (capabilityReadError != null) {
+                "Không đọc được khả năng camera/bộ mã hóa: $capabilityReadError. Anh vẫn có thể sửa cấu hình; app sẽ kiểm tra lại khi bấm Lưu."
+            } else {
+                "Cấu hình hiện tại chưa được Camera2 + H.264 phần cứng xác nhận. Anh vẫn có thể sửa bitrate/chế độ/profile rồi bấm Lưu cấu hình để kiểm tra lại."
+            }
+            presetNote.text = "Preset tạm thời chưa khả dụng; profile không bắt buộc để sửa hoặc lưu cấu hình."
             return
         }
 
+        capabilityLens.isEnabled = true
+        capabilityMode.isEnabled = true
+        presetSpinner.isEnabled = true
         capabilityLenses = supportedModes.map { it.lens }.distinct()
         capabilityLens.adapter = ArrayAdapter(
             this,
@@ -155,14 +220,13 @@ class SettingsActivity : Activity() {
             capabilityLenses.map { it.displayName },
         ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
 
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val savedLens = prefs.getString(KEY_CAPABILITY_LENS, null)
-            ?.let { name -> runCatching { CameraLens.valueOf(name) }.getOrNull() }
-        val matchingLens = capabilityLenses.firstOrNull { lens ->
-            lens == savedLens || supportedModes.any {
-                it.lens == lens && it.width == config.width && it.height == config.height && it.fps == config.fps
+        val matchingLens = capabilityLenses.firstOrNull { it == preferredLens }
+            ?: capabilityLenses.firstOrNull { lens ->
+                lens == savedLens || supportedModes.any {
+                    it.lens == lens && it.width == config.width && it.height == config.height && it.fps == config.fps
+                }
             }
-        } ?: capabilityLenses.first()
+            ?: capabilityLenses.first()
         val initialLensIndex = capabilityLenses.indexOf(matchingLens).coerceAtLeast(0)
 
         capabilityLens.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -170,12 +234,19 @@ class SettingsActivity : Activity() {
                 val lens = capabilityLenses.getOrNull(position) ?: return
                 selectedCapabilityLens = lens
                 updateModeSpinner(lens, config)
+                updatePresetOptions(lens)
             }
+
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
         capabilityLens.setSelection(initialLensIndex)
         selectedCapabilityLens = matchingLens
         updateModeSpinner(matchingLens, config)
+        updatePresetOptions(matchingLens)
+
+        if (usingRecoveryModes) {
+            capabilityNote.text = "Cấu hình cũ chưa được xác nhận. App đã mở các mode an toàn để anh chọn lại; chưa có gì được ghi cho tới khi bấm Lưu cấu hình."
+        }
     }
 
     private fun updateModeSpinner(lens: CameraLens, preferred: StreamConfig) {
@@ -189,6 +260,7 @@ class SettingsActivity : Activity() {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 visibleModes.getOrNull(position)?.let(::applyCapabilityMode)
             }
+
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
         val preferredIndex = visibleModes.indexOfFirst {
@@ -224,25 +296,260 @@ class SettingsActivity : Activity() {
         }
     }
 
+    private fun updatePresetOptions(lens: CameraLens) {
+        val base = configFromInputs()
+        val resolver = StreamingCapabilityResolver(this)
+        presetOptions = StreamPreset.entries.map { preset ->
+            val candidate = preset.applyTo(base)
+            val mode = runCatching {
+                resolver.resolve(candidate).firstOrNull {
+                    it.lens == lens &&
+                        it.width == preset.width &&
+                        it.height == preset.height &&
+                        it.fps == preset.fps
+                }
+            }.getOrNull()
+            PresetOption(
+                preset = preset,
+                mode = mode,
+                reason = if (mode == null) {
+                    "${preset.displayName} không được Camera2 + H.264 phần cứng xác nhận ở ${preset.bitrateMbps} Mbps trên ${lens.displayName}."
+                } else {
+                    null
+                },
+            )
+        }
+
+        presetSpinner.onItemSelectedListener = null
+        presetSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            presetOptions.map { option ->
+                if (option.mode != null) "✓ ${option.preset.displayName}" else "— ${option.preset.displayName} · Không hỗ trợ"
+            },
+        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        val selectedIndex = presetOptions.indexOfFirst { it.preset.matches(base) }.takeIf { it >= 0 } ?: 0
+        presetSpinner.setSelection(selectedIndex)
+        showPresetNote(presetOptions.getOrNull(selectedIndex))
+        presetSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val option = presetOptions.getOrNull(position) ?: return
+                showPresetNote(option)
+                if (option.mode != null) applyPreset(option, lens)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
+    private fun showPresetNote(option: PresetOption?) {
+        if (option == null) return
+        val mode = option.mode
+        presetNote.text = if (mode == null) {
+            option.reason
+        } else {
+            buildString {
+                append("${option.preset.displayName}: ${option.preset.bitrateMbps} Mbps · keyframe ${option.preset.keyframeIntervalSeconds}s")
+                mode.maxHardwareBitrate?.let { append(" · codec max ~${it / 1_000_000} Mbps") }
+            }
+        }
+    }
+
+    private fun applyPreset(option: PresetOption, lens: CameraLens) {
+        val mode = option.mode ?: return
+        val candidate = option.preset.applyTo(configFromInputs())
+        supportedModes = runCatching { StreamingCapabilityResolver(this).resolve(candidate) }.getOrDefault(supportedModes)
+        inputWidth.setText(candidate.width.toString())
+        inputHeight.setText(candidate.height.toString())
+        inputFps.setText(candidate.fps.toString())
+        inputBitrateMbps.setText(option.preset.bitrateMbps.toString())
+        inputKeyframeInterval.setText(option.preset.keyframeIntervalSeconds.toString())
+        updateModeSpinner(lens, candidate)
+        inputBitrateMbps.setText(option.preset.bitrateMbps.toString())
+        inputKeyframeInterval.setText(option.preset.keyframeIntervalSeconds.toString())
+        applyCapabilityMode(mode)
+        inputBitrateMbps.setText(option.preset.bitrateMbps.toString())
+        inputKeyframeInterval.setText(option.preset.keyframeIntervalSeconds.toString())
+    }
+
+    private fun setupProfiles(preferredId: String? = null) {
+        profiles = StreamProfileStore.list(this)
+        val activeId = StreamProfileStore.active(this)?.id
+        profileSpinner.onItemSelectedListener = null
+        profileSpinner.adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            if (profiles.isEmpty()) {
+                listOf("Không có profile · vẫn sửa config bình thường")
+            } else {
+                profiles.map { profile -> if (profile.id == activeId) "★ ${profile.name}" else profile.name }
+            },
+        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+
+        val targetId = preferredId ?: activeId ?: profiles.firstOrNull()?.id
+        val selectedIndex = profiles.indexOfFirst { it.id == targetId }.takeIf { it >= 0 } ?: 0
+        val hasProfiles = profiles.isNotEmpty()
+        profileSpinner.isEnabled = hasProfiles
+        btnUseProfile.isEnabled = hasProfiles
+        btnDeleteProfile.isEnabled = hasProfiles
+        if (hasProfiles) {
+            profileSpinner.setSelection(selectedIndex)
+            val selected = profiles[selectedIndex]
+            selectedProfileId = selected.id
+            profileName.setText(selected.name)
+        } else {
+            selectedProfileId = null
+            profileName.setText("")
+        }
+
+        profileSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val profile = profiles.getOrNull(position) ?: return
+                selectedProfileId = profile.id
+                profileName.setText(profile.name)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
+    private fun beginNewProfile() {
+        selectedProfileId = null
+        profileName.setText("")
+        profileName.requestFocus()
+        Toast.makeText(this, "Profile là tùy chọn. Nhập tên rồi bấm Lưu profile nếu muốn lưu riêng cấu hình này.", Toast.LENGTH_LONG).show()
+    }
+
+    private fun saveCurrentProfile() {
+        clearValidationErrors()
+        profileName.error = null
+        val name = profileName.text.toString().trim()
+        if (!SettingsValidator.isValidProfileName(name)) {
+            profileName.error = "Tên profile phải có 1–40 ký tự"
+            profileName.requestFocus()
+            Toast.makeText(this, "Chưa lưu profile: hãy nhập tên profile hợp lệ.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val pending = readValidatedSettings(requireHost = false)
+        if (pending == null) {
+            Toast.makeText(this, "Chưa lưu profile: hãy sửa mục đang báo lỗi.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        persistCurrent(pending)
+        val id = selectedProfileId ?: UUID.randomUUID().toString()
+        StreamProfileStore.save(
+            this,
+            StreamProfile(
+                id = id,
+                name = name,
+                config = pending.config,
+                lens = pending.lens,
+                obsHost = pending.host,
+                obsPort = pending.port,
+                listeningPort = pending.listenPort,
+            ),
+            makeActive = true,
+        )
+        selectedProfileId = id
+        setupProfiles(id)
+        Toast.makeText(this, "Đã lưu profile $name", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun useSelectedProfile() {
+        val profile = profiles.firstOrNull { it.id == selectedProfileId }
+        if (profile == null) {
+            Toast.makeText(this, "Chưa có profile để áp dụng.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        StreamProfileStore.setActive(this, profile.id)
+        StreamConfigStore.save(this, profile.config)
+        StreamConfig.installRuntimeConfig(profile.config)
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putString(KEY_OBS_HOST, profile.obsHost)
+            .putInt(KEY_OBS_PORT, profile.obsPort)
+            .putInt(KEY_LISTENING_PORT, profile.listeningPort)
+            .putString(KEY_CAPABILITY_LENS, profile.lens?.name)
+            .apply()
+        applyProfileToInputs(profile)
+        setupProfiles(profile.id)
+        Toast.makeText(this, "Đang dùng profile ${profile.name}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyProfileToInputs(profile: StreamProfile) {
+        applyConfigToInputs(profile.config)
+        inputObsHost.setText(profile.obsHost)
+        inputObsPort.setText(profile.obsPort.toString())
+        inputLatency.setText(profile.config.latencyMs.toString())
+        inputListeningPort.setText(profile.listeningPort.toString())
+        setupEncodingSelectors(profile.config)
+        setupCapabilitySelectors(profile.config, profile.lens)
+    }
+
+    private fun deleteSelectedProfile() {
+        val profile = profiles.firstOrNull { it.id == selectedProfileId }
+        if (profile == null) {
+            Toast.makeText(this, "Chưa có profile để xóa.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        StreamProfileStore.delete(this, profile.id)
+        selectedProfileId = null
+        setupProfiles()
+        Toast.makeText(this, "Đã xóa profile ${profile.name}", Toast.LENGTH_SHORT).show()
+    }
+
     private fun saveSettings(connectAfterSave: Boolean) {
         clearValidationErrors()
+        val pending = readValidatedSettings(requireHost = connectAfterSave)
+        if (pending == null) {
+            Toast.makeText(this, "Chưa lưu cấu hình: hãy sửa mục đang báo lỗi.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        persistCurrent(pending)
+        Toast.makeText(this, "Đã lưu cấu hình", Toast.LENGTH_SHORT).show()
+        restartMainActivity(connectAfterSave, pending.host, pending.port, pending.config.latencyMs)
+    }
 
+    private fun readValidatedSettings(requireHost: Boolean): PendingSettings? {
         val current = StreamConfigStore.load(this)
-        val width = validatedNumber(inputWidth, current.width, StreamConfigStore.MIN_WIDTH..StreamConfigStore.MAX_WIDTH, "Chiều rộng") ?: return
-        val height = validatedNumber(inputHeight, current.height, StreamConfigStore.MIN_HEIGHT..StreamConfigStore.MAX_HEIGHT, "Chiều cao") ?: return
-        val fps = validatedNumber(inputFps, current.fps, StreamConfigStore.MIN_FPS..StreamConfigStore.MAX_FPS, "Số hình/giây") ?: return
+        val width = validatedNumber(inputWidth, current.width, StreamConfigStore.MIN_WIDTH..StreamConfigStore.MAX_WIDTH, "Chiều rộng") ?: return null
+        val height = validatedNumber(inputHeight, current.height, StreamConfigStore.MIN_HEIGHT..StreamConfigStore.MAX_HEIGHT, "Chiều cao") ?: return null
+        val fps = validatedNumber(inputFps, current.fps, StreamConfigStore.MIN_FPS..StreamConfigStore.MAX_FPS, "Số hình/giây") ?: return null
         val bitrateMbps = validatedNumber(
             inputBitrateMbps,
             current.bitrateMbps,
             StreamConfig.MIN_CONFIGURABLE_BITRATE_MBPS..StreamConfig.MAX_CONFIGURABLE_BITRATE_MBPS,
             "Tốc độ bit",
-        ) ?: return
-        val keyframeInterval = validatedNumber(inputKeyframeInterval, current.keyframeIntervalSeconds, StreamConfigStore.MIN_KEYFRAME_INTERVAL..StreamConfigStore.MAX_KEYFRAME_INTERVAL, "Chu kỳ khung hình khóa") ?: return
-        val audioSampleRate = validatedNumber(inputAudioSampleRate, current.audioSampleRate, StreamConfigStore.MIN_AUDIO_SAMPLE_RATE..StreamConfigStore.MAX_AUDIO_SAMPLE_RATE, "Tần số lấy mẫu âm thanh") ?: return
-        val audioChannels = validatedNumber(inputAudioChannels, current.audioChannelCount, StreamConfigStore.MIN_AUDIO_CHANNELS..StreamConfigStore.MAX_AUDIO_CHANNELS, "Số kênh âm thanh") ?: return
-        val audioBitrateKbps = validatedNumber(inputAudioBitrateKbps, current.audioBitrateKbps, StreamConfigStore.MIN_AUDIO_BITRATE_KBPS..StreamConfigStore.MAX_AUDIO_BITRATE_KBPS, "Tốc độ bit âm thanh") ?: return
-        val bitrateMode = VideoBitrateMode.entries[inputVideoBitrateMode.selectedItemPosition.coerceIn(0, VideoBitrateMode.entries.lastIndex)]
-        val avcProfile = AvcProfilePreference.entries[inputAvcProfile.selectedItemPosition.coerceIn(0, AvcProfilePreference.entries.lastIndex)]
+        ) ?: return null
+        val keyframeInterval = validatedNumber(
+            inputKeyframeInterval,
+            current.keyframeIntervalSeconds,
+            StreamConfigStore.MIN_KEYFRAME_INTERVAL..StreamConfigStore.MAX_KEYFRAME_INTERVAL,
+            "Chu kỳ khung hình khóa",
+        ) ?: return null
+        val audioSampleRate = validatedNumber(
+            inputAudioSampleRate,
+            current.audioSampleRate,
+            StreamConfigStore.MIN_AUDIO_SAMPLE_RATE..StreamConfigStore.MAX_AUDIO_SAMPLE_RATE,
+            "Tần số lấy mẫu âm thanh",
+        ) ?: return null
+        val audioChannels = validatedNumber(
+            inputAudioChannels,
+            current.audioChannelCount,
+            StreamConfigStore.MIN_AUDIO_CHANNELS..StreamConfigStore.MAX_AUDIO_CHANNELS,
+            "Số kênh âm thanh",
+        ) ?: return null
+        val audioBitrateKbps = validatedNumber(
+            inputAudioBitrateKbps,
+            current.audioBitrateKbps,
+            StreamConfigStore.MIN_AUDIO_BITRATE_KBPS..StreamConfigStore.MAX_AUDIO_BITRATE_KBPS,
+            "Tốc độ bit âm thanh",
+        ) ?: return null
+        val bitrateMode = VideoBitrateMode.entries[
+            inputVideoBitrateMode.selectedItemPosition.coerceIn(0, VideoBitrateMode.entries.lastIndex)
+        ]
+        val avcProfile = AvcProfilePreference.entries[
+            inputAvcProfile.selectedItemPosition.coerceIn(0, AvcProfilePreference.entries.lastIndex)
+        ]
 
         val lens = selectedCapabilityLens
         val validAtRequestedSettings = lens != null && runCatching {
@@ -256,18 +563,29 @@ class SettingsActivity : Activity() {
         }.getOrDefault(false)
         if (!validAtRequestedSettings) {
             inputBitrateMbps.error = "Tổ hợp ống kính/độ phân giải/FPS/bitrate/profile này không được codec phần cứng hỗ trợ"
-            return
+            inputBitrateMbps.requestFocus()
+            return null
         }
 
         val host = inputObsHost.text.toString().trim()
-        if (!SettingsValidator.isValidHost(host, required = connectAfterSave)) {
+        if (!SettingsValidator.isValidHost(host, required = requireHost)) {
             inputObsHost.error = "Nhập tên máy hoặc địa chỉ IP hợp lệ"
             inputObsHost.requestFocus()
-            return
+            return null
         }
-        val port = validatedNumber(inputObsPort, ConnectionTarget.DEFAULT_PORT, 1..65535, "Cổng OBS") ?: return
-        val latency = validatedNumber(inputLatency, current.latencyMs, StreamConfigStore.MIN_LATENCY_MS..StreamConfigStore.MAX_LATENCY_MS, "Độ trễ") ?: return
-        val listenPort = validatedNumber(inputListeningPort, ConnectionTarget.DEFAULT_PORT, 1024..65535, "Cổng lắng nghe") ?: return
+        val port = validatedNumber(inputObsPort, ConnectionTarget.DEFAULT_PORT, 1..65535, "Cổng OBS") ?: return null
+        val latency = validatedNumber(
+            inputLatency,
+            current.latencyMs,
+            StreamConfigStore.MIN_LATENCY_MS..StreamConfigStore.MAX_LATENCY_MS,
+            "Độ trễ",
+        ) ?: return null
+        val listenPort = validatedNumber(
+            inputListeningPort,
+            ConnectionTarget.DEFAULT_PORT,
+            1024..65535,
+            "Cổng lắng nghe",
+        ) ?: return null
 
         val config = current.copy(
             width = width,
@@ -284,18 +602,42 @@ class SettingsActivity : Activity() {
             audioChannelCount = audioChannels,
             audioBitrate = audioBitrateKbps * 1_000,
         )
-        StreamConfigStore.save(this, config)
-        StreamConfig.installRuntimeConfig(config)
+        return PendingSettings(config, lens, host, port, listenPort)
+    }
 
+    private fun persistCurrent(pending: PendingSettings) {
+        StreamConfigStore.save(this, pending.config)
+        StreamConfig.installRuntimeConfig(pending.config)
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-            .putString(KEY_OBS_HOST, host)
-            .putInt(KEY_OBS_PORT, port)
-            .putInt(KEY_LISTENING_PORT, listenPort)
-            .putString(KEY_CAPABILITY_LENS, lens?.name)
+            .putString(KEY_OBS_HOST, pending.host)
+            .putInt(KEY_OBS_PORT, pending.port)
+            .putInt(KEY_LISTENING_PORT, pending.listenPort)
+            .putString(KEY_CAPABILITY_LENS, pending.lens?.name)
             .apply()
+    }
 
-        Toast.makeText(this, "Đã lưu cấu hình", Toast.LENGTH_SHORT).show()
-        restartMainActivity(connectAfterSave, host, port, latency)
+    private fun configFromInputs(): StreamConfig {
+        val current = StreamConfigStore.load(this)
+        val bitrateMode = VideoBitrateMode.entries.getOrNull(inputVideoBitrateMode.selectedItemPosition)
+            ?: current.videoBitrateMode
+        val profile = AvcProfilePreference.entries.getOrNull(inputAvcProfile.selectedItemPosition)
+            ?: current.avcProfilePreference
+        return current.copy(
+            width = inputWidth.text.toString().toIntOrNull() ?: current.width,
+            height = inputHeight.text.toString().toIntOrNull() ?: current.height,
+            fps = inputFps.text.toString().toIntOrNull() ?: current.fps,
+            bitrate = (inputBitrateMbps.text.toString().toIntOrNull() ?: current.bitrateMbps) * 1_000_000,
+            keyframeIntervalSeconds = inputKeyframeInterval.text.toString().toIntOrNull()
+                ?: current.keyframeIntervalSeconds,
+            latencyMs = inputLatency.text.toString().toIntOrNull() ?: current.latencyMs,
+            videoBitrateMode = bitrateMode,
+            avcProfilePreference = profile,
+            bFramesEnabled = inputBFrames.isChecked,
+            audioEnabled = inputAudioEnabled.isChecked,
+            audioSampleRate = inputAudioSampleRate.text.toString().toIntOrNull() ?: current.audioSampleRate,
+            audioChannelCount = inputAudioChannels.text.toString().toIntOrNull() ?: current.audioChannelCount,
+            audioBitrate = (inputAudioBitrateKbps.text.toString().toIntOrNull() ?: current.audioBitrateKbps) * 1_000,
+        )
     }
 
     private fun restartMainActivity(connectAfterSave: Boolean, host: String, port: Int, latency: Int) {
@@ -355,6 +697,20 @@ class SettingsActivity : Activity() {
             versionInfo.text = "OpenStream v${info.versionName} (${code})"
         }
     }
+
+    private data class PendingSettings(
+        val config: StreamConfig,
+        val lens: CameraLens?,
+        val host: String,
+        val port: Int,
+        val listenPort: Int,
+    )
+
+    private data class PresetOption(
+        val preset: StreamPreset,
+        val mode: SupportedStreamMode?,
+        val reason: String?,
+    )
 
     companion object {
         const val PREFS_NAME = StreamConfigStore.PREFS_NAME

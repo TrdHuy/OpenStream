@@ -124,6 +124,15 @@ class MainActivity : Activity() {
         requestRuntimePermissions()
         setContentView(R.layout.activity_main)
         bindViews()
+
+        // Pin the preview buffer to the stream size (capped at 1080p) so the camera
+        // gets a deterministic, supported 16:9 size instead of rounding the
+        // full-screen portrait surface to an arbitrary size that SurfaceFlinger
+        // then stretches into the window.
+        val previewWidth = streamConfig.width.coerceAtMost(MAX_PREVIEW_WIDTH)
+        val previewHeight = previewWidth * streamConfig.height / streamConfig.width
+        cameraPreview.holder.setFixedSize(previewWidth, previewHeight)
+
         setupGestureDetector()
 
         currentPort = getSharedPreferences(SettingsActivity.PREFS_NAME, MODE_PRIVATE)
@@ -199,8 +208,8 @@ class MainActivity : Activity() {
                 startPhoneServerIfAllowed()
             }
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                // Fix stretched preview: adjust SurfaceView to maintain camera aspect ratio
-                adjustPreviewAspectRatio(width, height)
+                Log.i("OpenStream", "Preview surface buffer: ${width}x${height}")
+                adjustPreviewAspectRatio()
             }
             override fun surfaceDestroyed(holder: SurfaceHolder) {
                 // Close the camera before encoder teardown tries to rebuild a
@@ -1212,32 +1221,47 @@ class MainActivity : Activity() {
 
     // ─────────────────────────── Preview aspect ratio fix ───────────────────────────
 
-    private fun adjustPreviewAspectRatio(surfaceWidth: Int, surfaceHeight: Int) {
-        // Camera outputs in landscape (e.g. 1920x1080) but phone is portrait
-        // The preview surface should match the camera aspect ratio to avoid stretching
-        val cameraAspect = streamConfig.width.toFloat() / streamConfig.height.toFloat()
-        // In portrait, the preview aspect should be height/width = 16/9
-        val targetAspect = cameraAspect // = 16:9
-
+    private fun adjustPreviewAspectRatio() {
+        val bufferAspect = streamConfig.width.toFloat() / streamConfig.height.toFloat()
         val containerWidth = previewContainer.width
         val containerHeight = previewContainer.height
-        if (containerWidth == 0 || containerHeight == 0) return
+        if (containerWidth == 0 || containerHeight == 0) {
+            previewContainer.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+                override fun onLayoutChange(
+                    v: View,
+                    left: Int,
+                    top: Int,
+                    right: Int,
+                    bottom: Int,
+                    oldLeft: Int,
+                    oldTop: Int,
+                    oldRight: Int,
+                    oldBottom: Int,
+                ) {
+                    if (right - left > 0 && bottom - top > 0) {
+                        v.removeOnLayoutChangeListener(this)
+                        adjustPreviewAspectRatio()
+                    }
+                }
+            })
+            return
+        }
 
-        val containerAspect = containerWidth.toFloat() / containerHeight.toFloat()
-        // In portrait, we want the preview to fill width and adjust height
+        // Buffer hiển thị xoay 90° trên màn hình dọc nên khung view mục tiêu là 9:16.
         val targetWidth: Int
         val targetHeight: Int
-        if (containerAspect > (1f / targetAspect)) {
-            // Container is wider than needed — match height, crop width
+        if (containerWidth.toFloat() / containerHeight > 1f / bufferAspect) {
+            // Container rộng hơn 9:16: fit theo chiều cao, pillarbox hai bên.
             targetHeight = containerHeight
-            targetWidth = (containerHeight / targetAspect).toInt()
+            targetWidth = (containerHeight / bufferAspect).toInt()
         } else {
-            // Container is taller than needed — match width, crop height
+            // Container cao hơn 9:16: fit theo chiều rộng, letterbox trên/dưới.
             targetWidth = containerWidth
-            targetHeight = (containerWidth * targetAspect).toInt()
+            targetHeight = (containerWidth * bufferAspect).toInt()
         }
 
         val lp = cameraPreview.layoutParams as FrameLayout.LayoutParams
+        if (lp.width == targetWidth && lp.height == targetHeight && lp.gravity == Gravity.CENTER) return
         lp.width = targetWidth
         lp.height = targetHeight
         lp.gravity = Gravity.CENTER
@@ -1276,6 +1300,7 @@ class MainActivity : Activity() {
         private const val CALLER_RECONNECT_BASE_DELAY_MS = 750L
         private const val CALLER_RECONNECT_MAX_DELAY_MS = 5_000L
         private const val TELEMETRY_LOG_INTERVAL_TICKS = 10L
+        private const val MAX_PREVIEW_WIDTH = 1920
         private const val SETTINGS_REQUEST_CODE = 200
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.CAMERA,

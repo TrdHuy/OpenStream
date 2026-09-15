@@ -12,6 +12,11 @@ object SettingsValidator {
         return hostname.matches(host) || (bracketedIpv6.matches(host) && ':' in host)
     }
 
+    fun isValidProfileName(name: String): Boolean {
+        val trimmed = name.trim()
+        return trimmed.length in 1..40 && trimmed.none { it == '\n' || it == '\r' || it.isISOControl() }
+    }
+
     fun parseNumber(raw: String, defaultValue: Int, validRange: IntRange): Int? {
         if (raw.isBlank()) return defaultValue
         return raw.toIntOrNull()?.takeIf { it in validRange }

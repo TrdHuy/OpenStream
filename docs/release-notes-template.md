@@ -1,16 +1,18 @@
 # OpenStream V1.0.1
 
-OpenStream V1.0.1 is a fixed Android-to-OBS camera release with V8 source naming, V7 scene compatibility, universal Android packaging, and install downloads for both surfaces.
+OpenStream V1.0.1 turns a supported Android phone into an H.264/AAC camera source for OBS Studio, with reusable stream profiles, capability-aware presets, SRT connectivity, and a Windows x64 OBS plugin package.
 
 ## What's New
 
 | Area | Change |
 |---|---|
-| OBS setup | Source properties now follow `1. Camera Slot`, `2. Live Camera Controls`, and `3. Network & Pairing (Advanced)`. |
-| Scene compatibility | Existing `OpenStream V7` scene sources keep loading through a compatibility source id. |
-| Pairing copy | OBS now explains the phone-side slot selection flow instead of leading with SRT details. |
-| Setup docs | The walkthrough now includes stale-plugin checks for Program Files, ProgramData, and per-user OBS plugin folders. |
+| Daily configuration | Settings are grouped around Camera/Encoding, Audio, and SRT Connection so ordinary setup does not require CLI commands. |
+| Profiles | Save, update, reuse, and delete named profiles containing video/audio settings, lens selection, and OBS endpoint details. |
+| Presets | Adds `1080p30`, `1080p60`, `4K30`, and `4K60` starting points. Each preset is checked against the phone's real Camera2 + hardware H.264 capability before use. |
+| Capability feedback | Unsupported presets remain visible with a clear unsupported state instead of silently advertising a mode the device cannot encode. |
+| Validation | Host, port, latency, encoder settings, audio settings, and profile names are validated before settings are persisted or a connection is started. |
 | OBS compatibility | Windows plugin releases target OBS Studio 32.2.1 x64 and its FFmpeg 62/62/60/9 ABI. |
+| Release verification | Android release artifacts are signed and verified; the OBS package and installer are smoke-tested before publication. |
 
 ## Downloads
 
@@ -22,22 +24,22 @@ OpenStream V1.0.1 is a fixed Android-to-OBS camera release with V8 source naming
 | `openstream-obs-windows-x64.zip` | Manual plugin package with DLL and install scripts. |
 
 > [!NOTE]
-> The Android APK is release-signed and accompanied by a SHA-256 checksum. Public releases fail instead of publishing a debug-signed fallback when signing inputs are unavailable.
+> The public Android APK is release-signed and accompanied by a SHA-256 checksum. Public releases fail instead of publishing a debug-signed fallback when production signing inputs are unavailable.
 
-## Install
+## Install and connect
 
-1. Install the APK on your Android phone.
-2. Run the OBS plugin installer on your Windows OBS PC.
-3. Restart OBS Studio.
-4. Add an `OpenStream V8` source.
-5. Open the Android app on the same Wi-Fi network and tap the discovered OBS slot.
+1. Install `openstream-android.apk` on the Android phone and grant Camera/Microphone permissions.
+2. Run `openstream-obs-plugin-installer-windows-x64.exe` on the Windows OBS PC, then restart OBS Studio.
+3. Add an OpenStream source in OBS.
+4. In the Android app, open **Cấu hình phát**, select a supported camera/preset, configure audio, then set the OBS host/IP, port, and SRT latency.
+5. Tap **Lưu và kết nối**. Save a named profile when you want to reuse the same camera/encoding/audio/endpoint setup later.
+6. When same-LAN discovery/pairing is available in the deployment environment, it may be used instead of manual endpoint entry. Manual SRT unicast remains the explicit fallback path.
 
-For the screenshot walkthrough, read [`docs/set-up.md`](https://github.com/YashasVM/OpenStream/blob/main/docs/set-up.md).
+For the current no-CLI setup, profile, preset, verification, and troubleshooting flow, read [`docs/phase7-user-guide.md`](phase7-user-guide.md).
 
-## Notes
+## Capability and network notes
 
-- Windows OBS plugin only.
-- Existing source names may still say `OpenStream V7`; rename them in OBS if you want the scene label to match V1.0.1.
-- Use 5 GHz or Wi-Fi 6 for best results.
-- Keep both devices on the same subnet.
-- Please report issues on GitHub.
+- `4K60` is shown as usable only when the selected Camera2 lens and hardware H.264 encoder confirm support for the requested mode/bitrate.
+- A supported encode mode does not by itself guarantee production network throughput. Validate high-bitrate 4K operation on the real LAN/Wi-Fi environment.
+- Tailscale functional evidence is not used as production LAN discovery, roaming, or throughput acceptance.
+- Windows x64 is the supported OBS plugin release target for this phase.

@@ -24,6 +24,16 @@ class SettingsValidatorTest {
     }
 
     @Test
+    fun profileNamesAreShortHumanReadableLabels() {
+        assertTrue(SettingsValidator.isValidProfileName("Studio 4K30"))
+        assertTrue(SettingsValidator.isValidProfileName("  Home OBS  "))
+        assertFalse(SettingsValidator.isValidProfileName(""))
+        assertFalse(SettingsValidator.isValidProfileName("   "))
+        assertFalse(SettingsValidator.isValidProfileName("x".repeat(41)))
+        assertFalse(SettingsValidator.isValidProfileName("Bad\nName"))
+    }
+
+    @Test
     fun numericValidationUsesDefaultsAndRejectsOutOfRangeValues() {
         assertEquals(9000, SettingsValidator.parseNumber("", 9000, 1..65535))
         assertEquals(120, SettingsValidator.parseNumber("120", 9000, 80..200))
