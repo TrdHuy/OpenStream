@@ -1,0 +1,324 @@
+name: Phase 5 OBS E2E
+
+on:
+  push:
+    branches:
+      - phase-5-obs-end-to-end
+  workflow_dispatch:
+    inputs:
+      run_production_acceptance:
+        description: "Chạy E2E production thủ công; chỉ bật khi Android và OBS ở cùng LAN/Wi-Fi phù hợp"
+        required: true
+        default: false
+        type: boolean
+      adb_serial:
+        description: "ADB serial của Android trong lab thủ công"
+        required: false
+        default: ""
+        type: string
+      receiver_host:
+        description: "IPv4 của máy OBS mà Android truy cập trực tiếp được trong LAN/Wi-Fi"
+        required: false
+        default: ""
+        type: string
+      obs_log_path:
+        description: "Đường dẫn OBS log trên self-hosted Linux lab"
+        required: false
+        default: ""
+        type: string
+      receiver_port:
+        description: "Cổng SRT của nguồn OpenStream trong OBS"
+        required: true
+        default: "9000"
+        type: string
+      duration_seconds:
+        description: "Thời lượng mỗi phiên phát"
+        required: true
+        default: "12"
+        type: string
+      stream_bitrate_mbps:
+        description: "Bitrate E2E; performance 20-40 Mbps chỉ nghiệm thu trên LAN/Wi-Fi phù hợp"
+        required: true
+        default: "8"
+        type: string
+      capability_bitrate_mbps:
+        description: "Bitrate gate capability 4K30"
+        required: true
+        default: "30"
+        type: string
+      latency_ms:
+        description: "SRT latency"
+        required: true
+        default: "120"
+        type: string
+
+permissions:
+  contents: read
+
+# Push CI chỉ kiểm những hạng mục không phụ thuộc broadcast domain/topology thật.
+# Production discovery -> reserve/control -> SRT -> media -> reconnect là manual
+# acceptance và không được làm đỏ push CI khi runner chỉ nối qua Tailscale.
+jobs:
+  build-android:
+    name: Build app + instrumentation APKs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # `tools` is a legacy package and is no longer reliably published.
+          packages: ""
+
+      - name: Install Android build packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.0.12077973"
+
+      - name: Compute Android version metadata
+        id: version
+        run: echo "code=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+
+      - name: Build streaming app and instrumentation APKs
+        working-directory: android
+        env:
+          OPENSTREAM_VERSION_NAME: 1.0.1
+          OPENSTREAM_VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+
+      - name: Normalize APK names
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/openstream-android.apk
+          cp android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk dist/openstream-android-test.apk
+
+      - name: Upload device-test APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-device-apks
+          path: dist/*.apk
+          if-no-files-found: error
+
+  build-obs-plugin-windows:
+    name: Build OBS plugin on Windows
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install OBS Studio 32.2.1 SDK/runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = "https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Windows-x64.zip"
+          $archive = "$env:RUNNER_TEMP\obs-studio.zip"
+          $destination = "$env:RUNNER_TEMP\obs-studio"
+          & curl.exe -L --fail --retry 3 -o $archive $url
+          if ($LASTEXITCODE -ne 0) { throw "OBS Studio download failed" }
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "db64a2934f8261f85b1410b84be011207a0afda5400d008289f1f1e211bcc7de"
+          if ($actual -ne $expected) { throw "OBS Studio checksum mismatch" }
+          Expand-Archive -Path $archive -DestinationPath $destination
+          "OPENSTREAM_OBS_INSTALL=$destination" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install matching Qt development files
+        shell: powershell
+        run: |
+          python -m pip install --disable-pip-version-check aqtinstall
+          python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O C:\Qt
+          "OPENSTREAM_QT_ROOT=C:\Qt\6.8.3\msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build plugin DLL
+        shell: cmd
+        run: |
+          set OPENSTREAM_SKIP_INSTALL=1
+          call build_plugin.bat
+
+      - name: Upload exact plugin under test
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-obs-plugin-windows
+          path: obs-plugin/build/openstream-obs.dll
+          if-no-files-found: error
+
+  obs-bootstrap-windows:
+    name: Load plugin and create OpenStream source in real OBS
+    needs: build-obs-plugin-windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download exact OBS plugin DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: phase5-obs-plugin-windows
+          path: dist/obs-plugin
+
+      - name: Install OBS Studio runtime and plugin
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = "https://github.com/obsproject/obs-studio/releases/download/32.2.1/OBS-Studio-32.2.1-Windows-x64.zip"
+          $archive = "$env:RUNNER_TEMP\obs-studio.zip"
+          $destination = "$env:RUNNER_TEMP\obs-studio"
+          & curl.exe -L --fail --retry 3 -o $archive $url
+          if ($LASTEXITCODE -ne 0) { throw "OBS Studio download failed" }
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "db64a2934f8261f85b1410b84be011207a0afda5400d008289f1f1e211bcc7de"
+          if ($actual -ne $expected) { throw "OBS Studio checksum mismatch" }
+          Expand-Archive -Path $archive -DestinationPath $destination
+
+          $plugin = Resolve-Path "dist\obs-plugin\openstream-obs.dll"
+          $pluginDir = Join-Path $destination "obs-plugins\64bit"
+          New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
+          Copy-Item -LiteralPath $plugin -Destination (Join-Path $pluginDir "openstream-obs.dll") -Force
+          "PHASE5_OBS_ROOT=$destination" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Enable local OBS WebSocket control
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $configDir = Join-Path $env:APPDATA "obs-studio\plugin_config\obs-websocket"
+          New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+          @'
+          {
+            "server_enabled": true,
+            "server_port": 4455,
+            "auth_required": false,
+            "first_load": false
+          }
+          '@ | Set-Content -LiteralPath (Join-Path $configDir "config.json") -Encoding utf8
+          python -m pip install --disable-pip-version-check obsws-python
+
+      - name: Start real OBS, verify plugin, and create source
+        shell: powershell
+        env:
+          RECEIVER_PORT: "9000"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $obsExe = Join-Path $env:PHASE5_OBS_ROOT "bin\64bit\obs64.exe"
+          if (!(Test-Path -LiteralPath $obsExe)) { throw "OBS executable missing: $obsExe" }
+
+          $obs = Start-Process -FilePath $obsExe -WorkingDirectory (Split-Path -Parent $obsExe) -ArgumentList @('--multi','--disable-shutdown-check','--minimize-to-tray') -PassThru
+          try {
+            $logRoot = Join-Path $env:APPDATA "obs-studio\logs"
+            $deadline = (Get-Date).AddSeconds(45)
+            $obsLog = $null
+            while ((Get-Date) -lt $deadline) {
+              if ($obs.HasExited) { throw "OBS exited during startup with code $($obs.ExitCode)" }
+              $obsLog = Get-ChildItem -LiteralPath $logRoot -Filter '*.txt' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+              if ($obsLog -and (Select-String -LiteralPath $obsLog.FullName -SimpleMatch '[OpenStream] OBS plugin loaded' -Quiet)) { break }
+              Start-Sleep -Seconds 1
+            }
+            if (!$obsLog -or !(Select-String -LiteralPath $obsLog.FullName -SimpleMatch '[OpenStream] OBS plugin loaded' -Quiet)) {
+              if ($obsLog) { Get-Content -LiteralPath $obsLog.FullName -Tail 120 | Write-Host }
+              throw 'OBS started but did not load the OpenStream plugin built by this run'
+            }
+
+            $createSource = @'
+          import time
+          import obsws_python as obs
+
+          deadline = time.time() + 30
+          client = None
+          while time.time() < deadline:
+              try:
+                  client = obs.ReqClient(host="127.0.0.1", port=4455, timeout=3)
+                  client.get_version()
+                  break
+              except Exception:
+                  time.sleep(1)
+          if client is None:
+              raise SystemExit("OBS WebSocket did not become ready")
+          scene = "Phase5"
+          source = "OpenStream Phase5"
+          try:
+              client.create_scene(scene)
+          except Exception:
+              pass
+          client.create_input(
+              scene,
+              source,
+              "openstream_phone_v8_source",
+              {"listener_enabled": True, "listener_port": 9000, "latency_ms": 120, "bitrate_mbps": 8},
+              True,
+          )
+          client.set_current_program_scene(scene)
+          print("Created real OBS OpenStream source for Phase 5")
+          '@
+            $createSource | python -
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create OpenStream source in real OBS' }
+          } finally {
+            Stop-Process -Id $obs.Id -Force -ErrorAction SilentlyContinue
+          }
+
+  production-e2e-linux:
+    name: Manual production LAN/Wi-Fi acceptance
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_production_acceptance }}
+    needs: build-android
+    runs-on: [self-hosted, linux, openstream-device-lab]
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download app + instrumentation APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: phase5-device-apks
+          path: dist
+
+      - name: Verify manual LAN/Wi-Fi prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v python3
+          command -v adb
+          test -n '${{ inputs.adb_serial }}'
+          test -n '${{ inputs.receiver_host }}'
+          test -n '${{ inputs.obs_log_path }}'
+          test -f '${{ inputs.obs_log_path }}'
+          python3 -m py_compile tools/phase5_obs_e2e.py
+          echo 'Production acceptance is manual-only and must use a suitable same-LAN/Wi-Fi topology; Tailscale relay evidence is not accepted.'
+
+      - name: Run Phase 5 production acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/phase5_obs_e2e.py \
+            --adb-serial '${{ inputs.adb_serial }}' \
+            --receiver-host '${{ inputs.receiver_host }}' \
+            --obs-log '${{ inputs.obs_log_path }}' \
+            --app-apk dist/openstream-android.apk \
+            --test-apk dist/openstream-android-test.apk \
+            --receiver-port '${{ inputs.receiver_port }}' \
+            --duration-seconds '${{ inputs.duration_seconds }}' \
+            --stream-bitrate-mbps '${{ inputs.stream_bitrate_mbps }}' \
+            --capability-bitrate-mbps '${{ inputs.capability_bitrate_mbps }}' \
+            --latency-ms '${{ inputs.latency_ms }}' \
+            --evidence-dir build/phase5-obs-e2e
+
+      - name: Stop test app
+        if: always()
+        run: adb -s '${{ inputs.adb_serial }}' shell am force-stop dev.openstream.app || true
+
+      - name: Upload Phase 5 manual acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-obs-e2e-manual-evidence
+          path: build/phase5-obs-e2e
+          if-no-files-found: warn
