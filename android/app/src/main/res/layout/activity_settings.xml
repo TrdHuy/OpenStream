@@ -140,6 +140,29 @@
             android:paddingEnd="12dp"
             android:layout_marginBottom="12dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Chế độ video"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpCapabilityMode"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <Spinner
             android:id="@+id/settingsCapabilityMode"
             android:layout_width="match_parent"
@@ -147,7 +170,7 @@
             android:background="@drawable/bg_minimal_input"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="16dp" />
 
         <TextView
             android:id="@+id/settingsCapabilityNote"
@@ -156,17 +179,41 @@
             android:text="Chỉ các tổ hợp Camera2 + AVC phần cứng hợp lệ mới xuất hiện."
             android:textColor="@color/os_text_tertiary"
             android:textSize="12sp"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="16dp"
+            android:visibility="gone" />
 
         <EditText android:id="@+id/settingsWidth" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" android:inputType="number" />
         <EditText android:id="@+id/settingsHeight" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" android:inputType="number" />
         <EditText android:id="@+id/settingsFps" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" android:inputType="number" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Bitrate Video (Mbps)"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpVideoBitrate"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <EditText
             android:id="@+id/settingsBitrateMbps"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Tốc độ bit hình (Mbps)"
+            android:hint="Ví dụ: 12-35"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:inputType="number"
@@ -175,6 +222,29 @@
             android:paddingEnd="16dp"
             android:singleLine="true"
             android:layout_marginBottom="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Chế độ Bitrate"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpBitrateMode"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
 
         <Spinner
             android:id="@+id/settingsVideoBitrateMode"
@@ -185,6 +255,29 @@
             android:paddingEnd="12dp"
             android:layout_marginBottom="12dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Profile H.264"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpH264Profile"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <Spinner
             android:id="@+id/settingsAvcProfile"
             android:layout_width="match_parent"
@@ -194,20 +287,58 @@
             android:paddingEnd="12dp"
             android:layout_marginBottom="12dp" />
 
-        <CheckBox
-            android:id="@+id/settingsBFrames"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Yêu cầu B-frame nếu bộ mã hóa cho phép"
-            android:textColor="@color/os_text_primary"
-            android:textSize="16sp"
-            android:layout_marginBottom="12dp" />
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <CheckBox
+                android:id="@+id/settingsBFrames"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="B-frame"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpBFrames"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Chu kỳ Keyframe (s)"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpKeyframeInterval"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
 
         <EditText
             android:id="@+id/settingsKeyframeInterval"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Chu kỳ khung hình khóa (giây)"
+            android:hint="Ví dụ: 2"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:inputType="number"
@@ -235,11 +366,34 @@
             android:textSize="16sp"
             android:layout_marginBottom="12dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Sample Rate (Hz)"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpAudioSampleRate"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <EditText
             android:id="@+id/settingsAudioSampleRate"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Tần số lấy mẫu, ví dụ 48000"
+            android:hint="Ví dụ: 48000"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:inputType="number"
@@ -248,12 +402,35 @@
             android:paddingEnd="16dp"
             android:singleLine="true"
             android:layout_marginBottom="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Audio Channels"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpAudioChannels"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
 
         <EditText
             android:id="@+id/settingsAudioChannels"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Số kênh âm thanh: 1 hoặc 2"
+            android:hint="1 (Mono) hoặc 2 (Stereo)"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:inputType="number"
@@ -263,11 +440,34 @@
             android:singleLine="true"
             android:layout_marginBottom="12dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Bitrate Âm (kbps)"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpAudioBitrate"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <EditText
             android:id="@+id/settingsAudioBitrateKbps"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Tốc độ bit âm thanh (kbps), ví dụ 128"
+            android:hint="Ví dụ: 128"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:inputType="number"
@@ -286,11 +486,34 @@
             android:fontFamily="sans-serif-medium"
             android:layout_marginBottom="12dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="OBS Host"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpObsHost"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <EditText
             android:id="@+id/settingsObsHost"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Tên máy hoặc địa chỉ IP của OBS"
+            android:hint="VD: 192.168.1.100"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:textSize="16sp"
@@ -301,11 +524,34 @@
             android:inputType="textUri"
             android:layout_marginBottom="12dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="OBS Port"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpObsPort"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <EditText
             android:id="@+id/settingsObsPort"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Cổng OBS, mặc định 9000"
+            android:hint="Mặc định: 9000"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:textSize="16sp"
@@ -315,12 +561,35 @@
             android:paddingEnd="16dp"
             android:singleLine="true"
             android:layout_marginBottom="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="SRT Latency (ms)"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpLatency"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
 
         <EditText
             android:id="@+id/settingsLatency"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Độ trễ SRT (ms), ví dụ 120 hoặc 2000"
+            android:hint="VD: 120 hoặc 2000"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:textSize="16sp"
@@ -331,11 +600,34 @@
             android:singleLine="true"
             android:layout_marginBottom="12dp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Listening Port"
+                android:textColor="@color/os_text_primary"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+            <ImageButton
+                android:id="@+id/helpListeningPort"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:src="@android:drawable/ic_menu_help"
+                android:contentDescription="Help" />
+        </LinearLayout>
+
         <EditText
             android:id="@+id/settingsListeningPort"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Cổng lắng nghe, mặc định 9000"
+            android:hint="Mặc định: 9000"
             android:textColor="@color/os_text_primary"
             android:textColorHint="@color/os_text_tertiary"
             android:textSize="16sp"

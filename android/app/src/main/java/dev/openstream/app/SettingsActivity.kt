@@ -1,6 +1,7 @@
 package dev.openstream.app
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -10,6 +11,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -121,6 +123,44 @@ class SettingsActivity : Activity() {
         btnSave.setOnClickListener { saveSettings(connectAfterSave = false) }
         btnSaveAndConnect.setOnClickListener { saveSettings(connectAfterSave = true) }
         btnBack.setOnClickListener { finish() }
+
+        setupHelpIcons()
+    }
+
+    private fun setupHelpIcons() {
+        findAndSetupHelpIcon(R.id.helpCapabilityMode, "Chế độ Video", R.string.help_capability_mode)
+        findAndSetupHelpIcon(R.id.helpVideoBitrate, "Bitrate Video", R.string.help_video_bitrate)
+        findAndSetupHelpIcon(R.id.helpBitrateMode, "Chế độ Bitrate", R.string.help_bitrate_mode)
+        findAndSetupHelpIcon(R.id.helpH264Profile, "Profile H.264", R.string.help_h264_profile)
+        findAndSetupHelpIcon(R.id.helpKeyframeInterval, "Chu kỳ Keyframe", R.string.help_keyframe_interval)
+        findAndSetupHelpIcon(R.id.helpBFrames, "B-frame", R.string.help_bframes)
+        findAndSetupHelpIcon(R.id.helpAudioSampleRate, "Sample Rate", R.string.help_audio_sample_rate)
+        findAndSetupHelpIcon(R.id.helpAudioChannels, "Audio Channels", R.string.help_audio_channels)
+        findAndSetupHelpIcon(R.id.helpAudioBitrate, "Bitrate Âm", R.string.help_audio_bitrate)
+        findAndSetupHelpIcon(R.id.helpObsHost, "OBS Host", R.string.help_obs_host)
+        findAndSetupHelpIcon(R.id.helpObsPort, "OBS Port", R.string.help_obs_port)
+        findAndSetupHelpIcon(R.id.helpLatency, "SRT Latency", R.string.help_latency)
+        findAndSetupHelpIcon(R.id.helpListeningPort, "Listening Port", R.string.help_listening_port)
+    }
+
+    private fun findAndSetupHelpIcon(iconId: Int, title: String, messageResId: Int) {
+        try {
+            val helpButton = findViewById<ImageButton>(iconId)
+            helpButton?.setOnClickListener {
+                showHelpDialog(title, getString(messageResId))
+            }
+        } catch (e: Exception) {
+            // Icon not found in this view hierarchy, skip silently
+        }
+    }
+
+    private fun showHelpDialog(title: String, message: String) {
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+            .create()
+            .show()
     }
 
     private fun loadSettings(): StreamConfig {

@@ -52,4 +52,31 @@
     <string name="screen_off_overlay_description">Screen dimmed. Tap to restore controls.</string>
     <string name="settings_save_connect">Save &amp; Connect</string>
     <string name="settings_save">Save Settings</string>
+
+    <!-- Settings Help Descriptions -->
+    <string name="help_capability_mode">Chọn độ phân giải và tốc độ khung hình. Chỉ các tổ hợp được thiết bị hỗ trợ (camera + bộ mã hóa H.264) mới xuất hiện trong danh sách.</string>
+
+    <string name="help_video_bitrate">Tốc độ dữ liệu video (Mbps). Cao hơn = chất lượng tốt hơn nhưng tiêu tốn nhiều băng thông hơn.\n\nKhuyến nghị:\n• 1080p30: 12 Mbps\n• 1080p60: 20 Mbps\n• 4K30: 30 Mbps\n• 4K60: 35 Mbps\n\nNhập giá trị: 1-200 Mbps</string>
+
+    <string name="help_bitrate_mode">Chế độ mã hóa tốc độ bit:\n\n• CBR (Constant Bit Rate): Tốc độ cố định, phù hợp cho streaming ổn định\n• VBR (Variable Bit Rate): Tốc độ thay đổi theo độ phức tạp khung hình, tiết kiệm dữ liệu hơn</string>
+
+    <string name="help_h264_profile">Mức độ nén H.264:\n\n• Main: Chuẩn, tương thích tốt với hầu hết các thiết bị\n• High: Nén tốt hơn (chất lượng tương đương với bitrate thấp hơn) nhưng yêu cầu thiết bị mạnh hơn</string>
+
+    <string name="help_keyframe_interval">Khoảng cách giữa các khung hình khóa (tính bằng giây). Giá trị nhỏ = khởi động nhanh hơn nhưng dữ liệu lớn. Mặc định: 2 giây</string>
+
+    <string name="help_bframes">B-frame (Bidirectional frames) giúp nén tốt hơn. Bật nếu bộ mã hóa hỗ trợ để tiết kiệm dữ liệu.</string>
+
+    <string name="help_audio_sample_rate">Tần số lấy mẫu âm thanh (Hz). Cao hơn = chất lượng tốt hơn.\n\nChuẩn:\n• 44100 Hz: CD quality\n• 48000 Hz: Professional audio/video</string>
+
+    <string name="help_audio_channels">Số kênh âm thanh:\n\n• 1: Mono (một kênh)\n• 2: Stereo (hai kênh)</string>
+
+    <string name="help_audio_bitrate">Tốc độ dữ liệu âm thanh (kbps). Cao hơn = chất lượng tốt hơn.\n\nKhuyến nghị:\n• 128 kbps: Chất lượng cao\n• 64 kbps: Chất lượng trung bình\n• 32 kbps: Chất lượng thấp</string>
+
+    <string name="help_obs_host">Địa chỉ IP hoặc tên máy của máy tính chạy OBS. VD: 192.168.1.100 hoặc mycomputer.local</string>
+
+    <string name="help_obs_port">Cổng SRT mà OBS đang lắng nghe. Mặc định: 9000. Phải khớp với cổng trong tùy chọn OBS Streaming phần cứng.</string>
+
+    <string name="help_latency">Độ trễ SRT (ms). Giá trị cao = buffer lớn hơn = ổn định hơn nhưng trễ lâu hơn.\n\nKhuyến nghị:\n• 120-500ms: Mạng nhanh\n• 1000-2000ms: Mạng chậm hoặc không ổn định</string>
+
+    <string name="help_listening_port">Cổng lắng nghe khi thiết bị hoạt động ở chế độ máy chủ (nhận kết nối từ các client khác). Mặc định: 9000</string>
 </resources>
