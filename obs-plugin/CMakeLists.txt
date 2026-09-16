@@ -22,22 +22,24 @@ endif()
 # SRT stream is smooth and source PTS advances at ~33.5 ms/frame, while OBS
 # receives ~30 decoded frames/s but presents only a few visible motion updates.
 # Keep the production source untouched for the A/B experiment; generate a build
-# copy whose source flags additionally request OBS async-unbuffered handling.
+# copy that calls OBS's supported async-unbuffered API as soon as the source is
+# created. OBS 32.2.1 exposes obs_source_set_async_unbuffered(); there is no
+# OBS_SOURCE_ASYNC_UNBUFFERED output flag in that release.
 set(OPENSTREAM_SOURCE_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/openstream-source.cpp")
 set(OPENSTREAM_SOURCE_FOR_BUILD "${CMAKE_CURRENT_BINARY_DIR}/openstream-source-unbuffered.cpp")
 file(READ "${OPENSTREAM_SOURCE_CPP}" OPENSTREAM_SOURCE_TEXT)
 string(REGEX MATCHALL
-    "\\.output_flags = OBS_SOURCE_ASYNC_VIDEO \\| OBS_SOURCE_AUDIO,"
-    OPENSTREAM_ASYNC_SOURCE_FLAG_MATCHES
+    "ctx->source = source;"
+    OPENSTREAM_SOURCE_INIT_MATCHES
     "${OPENSTREAM_SOURCE_TEXT}")
-list(LENGTH OPENSTREAM_ASYNC_SOURCE_FLAG_MATCHES OPENSTREAM_ASYNC_SOURCE_FLAG_MATCH_COUNT)
-if (NOT OPENSTREAM_ASYNC_SOURCE_FLAG_MATCH_COUNT EQUAL 2)
+list(LENGTH OPENSTREAM_SOURCE_INIT_MATCHES OPENSTREAM_SOURCE_INIT_MATCH_COUNT)
+if (NOT OPENSTREAM_SOURCE_INIT_MATCH_COUNT EQUAL 1)
     message(FATAL_ERROR
-        "Expected current + legacy OpenStream OBS source registrations to use the buffered async flag set; found ${OPENSTREAM_ASYNC_SOURCE_FLAG_MATCH_COUNT}")
+        "Expected exactly one OpenStream source initialization site; found ${OPENSTREAM_SOURCE_INIT_MATCH_COUNT}")
 endif()
 string(REPLACE
-    ".output_flags = OBS_SOURCE_ASYNC_VIDEO | OBS_SOURCE_AUDIO,"
-    ".output_flags = OBS_SOURCE_ASYNC_VIDEO | OBS_SOURCE_ASYNC_UNBUFFERED | OBS_SOURCE_AUDIO,"
+    "ctx->source = source;"
+    "ctx->source = source;\n  obs_source_set_async_unbuffered(source, true);"
     OPENSTREAM_SOURCE_TEXT
     "${OPENSTREAM_SOURCE_TEXT}")
 file(WRITE "${OPENSTREAM_SOURCE_FOR_BUILD}" "${OPENSTREAM_SOURCE_TEXT}")
