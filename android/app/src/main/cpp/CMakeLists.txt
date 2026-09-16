@@ -37,3 +37,11 @@ if (OPENSTREAM_ENABLE_LIBSRT)
 else()
     target_compile_definitions(openstream_srt PRIVATE OPENSTREAM_HAVE_LIBSRT=0)
 endif()
+
+# Android 15+ devices may use 16 KB memory pages. NDK r27 and lower need
+# explicit ELF segment alignment; keeping both linker flags is also harmless
+# with newer NDKs and makes the native library packaging contract explicit.
+target_link_options(openstream_srt PRIVATE
+    "LINKER:-z,max-page-size=16384"
+    "LINKER:-z,common-page-size=16384"
+)

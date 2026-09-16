@@ -52,4 +52,32 @@
     <string name="screen_off_overlay_description">Screen dimmed. Tap to restore controls.</string>
     <string name="settings_save_connect">Save &amp; Connect</string>
     <string name="settings_save">Save Settings</string>
+
+    <!-- Settings screen copy -->
+    <string name="settings_screen_title">Cấu hình phát</string>
+    <string name="settings_section_profile">PROFILE</string>
+    <string name="settings_profile_name_example_hint">Tên profile, ví dụ Studio 4K30</string>
+    <string name="settings_profile_new">Mới</string>
+    <string name="settings_profile_use">Dùng</string>
+    <string name="settings_profile_save_short">Lưu</string>
+    <string name="settings_profile_delete">Xóa</string>
+    <string name="settings_section_camera_encoding">CAMERA VÀ MÃ HÓA</string>
+    <string name="settings_preset_note">Preset chỉ được áp dụng khi Camera2 + H.264 phần cứng xác nhận hỗ trợ.</string>
+    <string name="settings_capability_note">Chỉ các tổ hợp Camera2 + AVC phần cứng hợp lệ mới xuất hiện.</string>
+    <string name="settings_video_bitrate_hint">Tốc độ bit hình (Mbps)</string>
+    <string name="settings_bframes">Yêu cầu B-frame nếu bộ mã hóa cho phép</string>
+    <string name="settings_keyframe_hint">Chu kỳ khung hình khóa (giây)</string>
+    <string name="settings_section_audio">ÂM THANH</string>
+    <string name="settings_audio_enabled">Phát âm thanh từ micro</string>
+    <string name="settings_audio_sample_rate_hint">Tần số lấy mẫu, ví dụ 48000</string>
+    <string name="settings_audio_channels_hint">Số kênh âm thanh: 1 hoặc 2</string>
+    <string name="settings_audio_bitrate_hint">Tốc độ bit âm thanh (kbps), ví dụ 128</string>
+    <string name="settings_section_srt">KẾT NỐI SRT</string>
+    <string name="settings_obs_host_hint">Tên máy hoặc địa chỉ IP của OBS</string>
+    <string name="settings_obs_port_hint">Cổng OBS, mặc định 9000</string>
+    <string name="settings_latency_hint">Độ trễ SRT (ms), ví dụ 120 hoặc 2000</string>
+    <string name="settings_listening_port_hint">Cổng lắng nghe, mặc định 9000</string>
+    <string name="settings_save_connect_vi">Lưu và kết nối</string>
+    <string name="settings_save_vi">Lưu cấu hình</string>
+    <string name="settings_back_vi">Quay lại</string>
 </resources>
