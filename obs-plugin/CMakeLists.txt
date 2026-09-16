@@ -18,32 +18,10 @@ if (NOT DEFINED OBS_ROOT)
     message(FATAL_ERROR "Set OBS_ROOT to the OBS Studio install, source checkout, build tree, or development SDK root.")
 endif()
 
-# POC for the OBS slow-motion/judder investigation. Direct ffplay of the same
-# SRT stream is smooth and source PTS advances at ~33.5 ms/frame, while OBS
-# receives ~30 decoded frames/s but presents only a few visible motion updates.
-# Keep the production source untouched for the A/B experiment; generate a build
-# copy that calls OBS's supported async-unbuffered API as soon as the source is
-# created. OBS 32.2.1 exposes obs_source_set_async_unbuffered(); there is no
-# OBS_SOURCE_ASYNC_UNBUFFERED output flag in that release.
-set(OPENSTREAM_SOURCE_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/openstream-source.cpp")
-set(OPENSTREAM_SOURCE_FOR_BUILD "${CMAKE_CURRENT_BINARY_DIR}/openstream-source-unbuffered.cpp")
-file(READ "${OPENSTREAM_SOURCE_CPP}" OPENSTREAM_SOURCE_TEXT)
-set(OPENSTREAM_SOURCE_INIT_ANCHOR "ctx->source = source;")
-string(FIND "${OPENSTREAM_SOURCE_TEXT}" "${OPENSTREAM_SOURCE_INIT_ANCHOR}" OPENSTREAM_SOURCE_INIT_POS)
-if (OPENSTREAM_SOURCE_INIT_POS EQUAL -1)
-    message(FATAL_ERROR "Could not find the OpenStream source initialization site for the async-unbuffered POC")
-endif()
-string(REPLACE
-    "${OPENSTREAM_SOURCE_INIT_ANCHOR}"
-    "ctx->source = source;\n  obs_source_set_async_unbuffered(source, true);"
-    OPENSTREAM_SOURCE_TEXT
-    "${OPENSTREAM_SOURCE_TEXT}")
-file(WRITE "${OPENSTREAM_SOURCE_FOR_BUILD}" "${OPENSTREAM_SOURCE_TEXT}")
-
 add_library(openstream-obs MODULE
     src/async-control-client.cpp
     src/openstream-dock.cpp
-    ${OPENSTREAM_SOURCE_FOR_BUILD}
+    src/openstream-source.cpp
 )
 
 if (BUILD_TESTING)
@@ -128,7 +106,6 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/obsconfig.h"
 
 target_include_directories(openstream-obs PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${OBS_INCLUDE_DIR}
     ${OBS_FRONTEND_INCLUDE_DIR}
     ${AVFORMAT_INCLUDE_DIR}
