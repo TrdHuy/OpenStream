@@ -2027,6 +2027,10 @@ void openstream_update(void *data, obs_data_t *settings) {
 void *openstream_create(obs_data_t *settings, obs_source_t *source) {
   auto *ctx = new OpenStreamSource();
   ctx->source = source;
+  // OpenStream already maps stream PTS onto the OBS clock. Letting libobs add
+  // async buffering on top caused repeated/stale presentation of otherwise
+  // smooth 30 fps input, so keep this live camera source unbuffered.
+  obs_source_set_async_unbuffered(source, true);
   const char *saved_source_instance_id = obs_data_get_string(settings, "source_instance_id");
   ctx->instance_id =
       (saved_source_instance_id && saved_source_instance_id[0] != '\0')
