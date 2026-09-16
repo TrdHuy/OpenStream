@@ -37,3 +37,6 @@ if (OPENSTREAM_ENABLE_LIBSRT)
 else()
     target_compile_definitions(openstream_srt PRIVATE OPENSTREAM_HAVE_LIBSRT=0)
 endif()
+
+# Enforce 16 KB alignment for ELF segments (Android 5+ requirement)
+target_link_options(openstream_srt PRIVATE "LINKER:-z,max-page-size=0x4000")
