@@ -28,17 +28,13 @@ endif()
 set(OPENSTREAM_SOURCE_CPP "${CMAKE_CURRENT_SOURCE_DIR}/src/openstream-source.cpp")
 set(OPENSTREAM_SOURCE_FOR_BUILD "${CMAKE_CURRENT_BINARY_DIR}/openstream-source-unbuffered.cpp")
 file(READ "${OPENSTREAM_SOURCE_CPP}" OPENSTREAM_SOURCE_TEXT)
-string(REGEX MATCHALL
-    "ctx->source = source;"
-    OPENSTREAM_SOURCE_INIT_MATCHES
-    "${OPENSTREAM_SOURCE_TEXT}")
-list(LENGTH OPENSTREAM_SOURCE_INIT_MATCHES OPENSTREAM_SOURCE_INIT_MATCH_COUNT)
-if (NOT OPENSTREAM_SOURCE_INIT_MATCH_COUNT EQUAL 1)
-    message(FATAL_ERROR
-        "Expected exactly one OpenStream source initialization site; found ${OPENSTREAM_SOURCE_INIT_MATCH_COUNT}")
+set(OPENSTREAM_SOURCE_INIT_ANCHOR "ctx->source = source;")
+string(FIND "${OPENSTREAM_SOURCE_TEXT}" "${OPENSTREAM_SOURCE_INIT_ANCHOR}" OPENSTREAM_SOURCE_INIT_POS)
+if (OPENSTREAM_SOURCE_INIT_POS EQUAL -1)
+    message(FATAL_ERROR "Could not find the OpenStream source initialization site for the async-unbuffered POC")
 endif()
 string(REPLACE
-    "ctx->source = source;"
+    "${OPENSTREAM_SOURCE_INIT_ANCHOR}"
     "ctx->source = source;\n  obs_source_set_async_unbuffered(source, true);"
     OPENSTREAM_SOURCE_TEXT
     "${OPENSTREAM_SOURCE_TEXT}")
