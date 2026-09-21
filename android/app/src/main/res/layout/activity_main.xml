@@ -1,12 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- OpenStream — Minimalist UI.
-     Full screen camera preview with floating glassmorphic controls. -->
+<!--
+  AirLens — camera activity.
+
+  Always-dark HUD over a full-bleed camera preview. Colours come from the cam_* palette
+  (values/colors.xml), spacing from cam_* dimens, backgrounds from bg_cam_* shapes.
+
+  Z-order (first child is the bottom-most layer):
+    1. previewContainer  — SurfaceView camera preview (owns pinch-to-zoom touches)
+    2. gradientOverlay   — top/bottom legibility scrims, touch-transparent
+    3. topLayer          — status pill + HUD toggle, alert banner, glance HUD card
+    4. zoomLabel         — centre zoom readout, shown ~1.4 s after a pinch
+    5. bottomLayer       — OBS slots panel, lens chips, tools tiles, core buttons, hint
+    6. hudSheetScrim     — dimming scrim behind the telemetry sheet
+    7. hudSheet          — telemetry bottom sheet (tabs + rows)
+    8. identifyOverlay   — full-bleed "IDENTIFY" flash triggered from OBS
+    9. screenOffOverlay  — black display-off cover; any tap wakes the UI
+
+  Only real controls are clickable. Container layers are left non-clickable so unhandled
+  touches fall through to the preview / Activity.onTouchEvent for pinch zoom.
+  Window insets (status bar / nav bar) are added to topLayer / bottomLayer padding in code.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/os_black">
 
-    <!-- ====== BACKGROUND CAMERA PREVIEW ====== -->
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 1 — CAMERA PREVIEW
+         ═══════════════════════════════════════════════════════════════════════ -->
     <FrameLayout
         android:id="@+id/previewContainer"
         android:layout_width="match_parent"
@@ -17,274 +39,1095 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center" />
-
-        <!-- IDENTIFY OVERLAY -->
-        <TextView
-            android:id="@+id/identifyOverlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/os_overlay_dark"
-            android:gravity="center"
-            android:textColor="@color/os_text_primary"
-            android:textSize="54sp"
-            android:fontFamily="sans-serif-light"
-            android:lineSpacingExtra="10dp"
-            android:visibility="gone" />
     </FrameLayout>
 
-    <!-- ====== TOP OVERLAY (Status) ====== -->
-    <FrameLayout
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 2 — LEGIBILITY SCRIMS (decorative, touch-transparent)
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/gradientOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no">
+
+        <View
+            android:id="@+id/scrimTop"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="45"
+            android:background="@drawable/bg_cam_scrim_top"
+            android:importantForAccessibility="no" />
+
+        <View
+            android:id="@+id/scrimBottom"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="55"
+            android:background="@drawable/bg_cam_scrim_bottom"
+            android:importantForAccessibility="no" />
+    </LinearLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 3 — TOP LAYER: status pill, HUD toggle, alert banner, glance HUD
+         Children are spaced 10dp apart (marginTop on the 2nd/3rd child; GONE
+         children collapse their margin so the gap stays constant).
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/topLayer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:background="@drawable/scrim_top"
-        android:paddingStart="@dimen/os_spacing_lg"
-        android:paddingEnd="@dimen/os_spacing_lg"
-        android:paddingTop="56dp"
-        android:paddingBottom="32dp">
+        android:orientation="vertical"
+        android:paddingStart="@dimen/cam_pad_h"
+        android:paddingEnd="@dimen/cam_pad_h"
+        android:paddingTop="@dimen/cam_pad_top">
 
-        <LinearLayout
+        <!-- 3a. Status row: pill hugs its content at the start, HUD toggle pinned at
+             the end. A FrameLayout row bounds the pill to (row − toggle − gap) so a
+             long slot name ellipsises instead of pushing the toggle off-screen. -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_height="wrap_content">
 
-            <!-- LIVE badge -->
             <LinearLayout
-                android:id="@+id/liveBadge"
+                android:id="@+id/statusPill"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="start|top"
+                android:layout_marginEnd="54dp"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:background="@drawable/bg_minimal_pill"
+                android:background="@drawable/bg_cam_pill"
                 android:paddingStart="12dp"
-                android:paddingEnd="16dp"
                 android:paddingTop="8dp"
-                android:paddingBottom="8dp"
-                android:visibility="gone">
+                android:paddingEnd="14dp"
+                android:paddingBottom="8dp">
 
+                <!-- Phase dot; colour + pulse animated in code. -->
                 <View
-                    android:id="@+id/liveDot"
-                    android:layout_width="8dp"
-                    android:layout_height="8dp"
-                    android:background="@drawable/live_dot" />
+                    android:id="@+id/statusDot"
+                    android:layout_width="@dimen/cam_dot"
+                    android:layout_height="@dimen/cam_dot"
+                    android:background="@drawable/bg_cam_dot"
+                    android:importantForAccessibility="no" />
 
-                <TextView
+                <!-- 0dp + weight inside a wrap_content row = CSS min-width:0 — the
+                     column shrinks (and the texts ellipsise) only when the pill would
+                     otherwise overflow. -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/statusState"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/cam_state_ready"
+                        android:textColor="@color/cam_text"
+                        android:textSize="13sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:letterSpacing="0.02"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                    <TextView
+                        android:id="@+id/statusDetail"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/cam_state_ready_detail"
+                        android:textColor="@color/cam_text_72"
+                        android:textSize="11sp"
+                        android:fontFamily="sans-serif"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+                </LinearLayout>
+
+                <!-- liveBadge: VISIBLE iff the transport is live (instrumentation
+                     tests read this). Divider + running duration. -->
+                <LinearLayout
+                    android:id="@+id/liveBadge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="LIVE"
-                    android:textColor="@color/os_live_red"
-                    android:textSize="12sp"
-                    android:fontFamily="sans-serif-medium"
-                    android:layout_marginStart="8dp" />
+                    android:layout_marginStart="8dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@color/cam_text_22"
+                        android:importantForAccessibility="no" />
+
+                    <TextView
+                        android:id="@+id/statusDuration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="8dp"
+                        android:textColor="@color/cam_text"
+                        android:textSize="13sp"
+                        android:fontFamily="sans-serif-medium"
+                        android:fontFeatureSettings="tnum"
+                        android:maxLines="1" />
+                </LinearLayout>
             </LinearLayout>
 
-            <!-- Stream info chip -->
+            <!-- HUD on/off toggle. Default matches hudOn=true (light circle, dark
+                 text); code swaps bg_cam_ghost_circle / bg_cam_light_circle. -->
+            <TextView
+                android:id="@+id/hudToggle"
+                android:layout_width="@dimen/cam_hud_btn"
+                android:layout_height="@dimen/cam_hud_btn"
+                android:layout_gravity="end|top"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_light_circle"
+                android:text="@string/cam_hud"
+                android:textColor="@color/cam_on_light"
+                android:textSize="10sp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.06"
+                android:clickable="true"
+                android:focusable="true" />
+        </FrameLayout>
+
+        <!-- 3b. Alert banner (Lost / Reconnecting / Thermal / Recovered).
+             Background drawable (bg_cam_alert_*) and accent tints set in code.
+             The whole card is the touch target; alertAction is its trailing label. -->
+        <LinearLayout
+            android:id="@+id/alertBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal"
+            android:gravity="top"
+            android:paddingStart="14dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/alertIcon"
+                android:layout_width="@dimen/cam_alert_icon"
+                android:layout_height="@dimen/cam_alert_icon"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_dot"
+                android:text="!"
+                android:textColor="@color/cam_on_light"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:importantForAccessibility="no" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/alertTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/cam_text"
+                    android:textSize="13sp"
+                    android:fontFamily="sans-serif-medium" />
+
+                <TextView
+                    android:id="@+id/alertBody"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/cam_text_80"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/alertAction"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:textColor="@color/cam_accent_soft"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1" />
+        </LinearLayout>
+
+        <!-- 3c. Glance HUD card — 5 key/value rows inflated from
+             item_hud_glance_row.xml into hudGlanceRows. Tapping opens the sheet.
+             streamInfoChip is the debug footer (text is always kept current; it is
+             only VISIBLE when HUD on && Debug on). -->
+        <LinearLayout
+            android:id="@+id/hudGlance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start"
+            android:layout_marginTop="10dp"
+            android:minWidth="@dimen/cam_glance_min_w"
+            android:orientation="vertical"
+            android:background="@drawable/bg_cam_card"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="10dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/hudGlanceTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_hud_live_title"
+                    android:textColor="@color/cam_text_50"
+                    android:textSize="9sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.14"
+                    android:maxLines="1" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:minWidth="12dp"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    android:id="@+id/hudGlanceMore"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_hud_tap_for_all"
+                    android:textColor="@color/cam_text_50"
+                    android:textSize="10sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/hudGlanceRows"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
             <TextView
                 android:id="@+id/streamInfoChip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_minimal_pill"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp"
-                android:textColor="@color/os_text_secondary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginStart="@dimen/os_spacing_sm"
-                android:visibility="gone" />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-
-            <!-- Zoom label -->
-            <TextView
-                android:id="@+id/zoomLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_minimal_pill"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp"
-                android:textColor="@color/os_text_primary"
-                android:textSize="14sp"
-                android:fontFamily="sans-serif-medium"
-                android:visibility="gone" />
-        </LinearLayout>
-    </FrameLayout>
-
-    <!-- ====== BOTTOM CONTROLS ====== -->
-    <LinearLayout
-        android:id="@+id/bottomControls"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:orientation="vertical"
-        android:background="@drawable/scrim_bottom"
-        android:paddingStart="@dimen/os_spacing_lg"
-        android:paddingEnd="@dimen/os_spacing_lg"
-        android:paddingTop="32dp"
-        android:paddingBottom="@dimen/os_spacing_xl"
-        android:fitsSystemWindows="true">
-
-        <!-- Status Block -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginBottom="@dimen/os_spacing_md">
-
-            <TextView
-                android:id="@+id/statusText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/status_ready"
-                android:textColor="@color/os_text_primary"
-                android:textSize="20sp"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginBottom="4dp" />
-
-            <TextView
-                android:id="@+id/statusDetail"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/os_text_secondary"
-                android:textSize="14sp"
-                android:fontFamily="sans-serif" />
-        </LinearLayout>
-
-        <!-- OBS Slot List (populated programmatically) -->
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:scrollbars="none"
-            android:clipToPadding="false"
-            android:layout_marginBottom="@dimen/os_spacing_md">
-
-            <LinearLayout
-                android:id="@+id/obsSlotList"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical" />
-        </HorizontalScrollView>
-
-        <!-- Lens Selector Row -->
-        <LinearLayout
-            android:id="@+id/lensSelectorRow"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="@dimen/os_spacing_lg">
-            <!-- Lens buttons added programmatically -->
-        </LinearLayout>
-
-        <!-- Utility Button Row -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <!-- Screen off -->
-            <TextView
-                android:id="@+id/btnScreenOff"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="@dimen/os_control_btn_height"
-                android:gravity="center"
-                android:background="@drawable/bg_minimal_pill"
-                android:text="Screen"
-                android:textColor="@color/os_text_primary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginEnd="@dimen/os_spacing_xs" />
-
-            <!-- Stay -->
-            <TextView
-                android:id="@+id/btnKeepScreenOn"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="@dimen/os_control_btn_height"
-                android:gravity="center"
-                android:background="@drawable/bg_minimal_pill"
-                android:text="Stay"
-                android:textColor="@color/os_text_primary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginEnd="@dimen/os_spacing_xs" />
-
-            <!-- Torch -->
-            <TextView
-                android:id="@+id/btnTorch"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="@dimen/os_control_btn_height"
-                android:gravity="center"
-                android:background="@drawable/bg_minimal_pill"
-                android:text="Torch"
-                android:textColor="@color/os_text_primary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginEnd="@dimen/os_spacing_xs" />
-
-            <!-- Flip -->
-            <TextView
-                android:id="@+id/btnFlipCamera"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="@dimen/os_control_btn_height"
-                android:gravity="center"
-                android:background="@drawable/bg_minimal_pill"
-                android:text="Flip"
-                android:textColor="@color/os_text_primary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginEnd="@dimen/os_spacing_xs" />
-
-            <!-- Settings -->
-            <TextView
-                android:id="@+id/btnSettings"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="@dimen/os_control_btn_height"
-                android:gravity="center"
-                android:background="@drawable/bg_minimal_pill"
-                android:text="Config"
-                android:textColor="@color/os_text_primary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginEnd="@dimen/os_spacing_xs" />
-
-            <!-- Stop -->
-            <TextView
-                android:id="@+id/btnStop"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="@dimen/os_control_btn_height"
-                android:gravity="center"
-                android:background="@drawable/bg_minimal_btn_danger"
-                android:text="Stop"
-                android:textColor="@color/os_text_primary"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/cam_text_38"
+                android:textSize="9sp"
+                android:fontFamily="sans-serif"
+                android:fontFeatureSettings="tnum"
+                android:maxLines="1"
                 android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Last child so screen-off mode covers status and controls as advertised. -->
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 4 — ZOOM READOUT (transient, e.g. "1.8×")
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <TextView
+        android:id="@+id/zoomLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_cam_zoom"
+        android:paddingStart="22dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="22dp"
+        android:paddingBottom="14dp"
+        android:textColor="@color/cam_text"
+        android:textSize="26sp"
+        android:fontFamily="sans-serif-medium"
+        android:fontFeatureSettings="tnum"
+        android:includeFontPadding="false"
+        android:visibility="gone" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 5 — BOTTOM LAYER: slots panel, lens chips, tools tiles, core row, hint
+         Children are spaced 12dp apart via marginBottom on every child but the
+         last, so GONE children (slotsPanel, toolsExpanded) collapse cleanly.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/bottomLayer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/cam_pad_h"
+        android:paddingEnd="@dimen/cam_pad_h"
+        android:paddingBottom="@dimen/cam_pad_bottom">
+
+        <!-- 5a. OBS camera slots panel (Ready / Paired only). Rows are inflated from
+             item_cam_slot.xml into obsSlotList. -->
+        <LinearLayout
+            android:id="@+id/slotsPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_cam_card_lg"
+            android:padding="14dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/slotsTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_slots_title"
+                    android:textColor="@color/cam_text_55"
+                    android:textSize="10sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.14"
+                    android:maxLines="1" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1"
+                    android:minWidth="8dp"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    android:id="@+id/slotScanLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_slots_scanning"
+                    android:textColor="@color/cam_text_55"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/obsSlotList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </LinearLayout>
+
+        <!-- 5b. Lens chips (one per available CameraLens, inflated from
+             item_cam_lens_chip.xml). Horizontal scroll for phones with 4+ lenses. -->
+        <HorizontalScrollView
+            android:id="@+id/lensScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:scrollbars="none"
+            android:clipToPadding="false"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:id="@+id/lensSelectorRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="2dp" />
+        </HorizontalScrollView>
+
+        <!-- 5c. Tools tiles (revealed by btnTools; rise 200 ms in code).
+             Active tile = bg_cam_tile_light + cam_on_light text, set in code. -->
+        <LinearLayout
+            android:id="@+id/toolsExpanded"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/btnTorch"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/cam_tile_h"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_tile"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/torchLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_tool_torch"
+                    android:textColor="@color/cam_white_92"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.04"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/torchSub"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/cam_off"
+                    android:textColor="@color/cam_text_50"
+                    android:textSize="9sp"
+                    android:fontFamily="sans-serif"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/btnFlipCamera"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/cam_tile_h"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_tile"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/flipLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_tool_flip"
+                    android:textColor="@color/cam_white_92"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.04"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/flipSub"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/cam_back"
+                    android:textColor="@color/cam_text_50"
+                    android:textSize="9sp"
+                    android:fontFamily="sans-serif"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/btnKeepScreenOn"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/cam_tile_h"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_tile"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/stayLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_tool_stay"
+                    android:textColor="@color/cam_white_92"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.04"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/staySub"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/cam_auto"
+                    android:textColor="@color/cam_text_50"
+                    android:textSize="9sp"
+                    android:fontFamily="sans-serif"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/btnScreenOff"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/cam_tile_h"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_tile"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/displayLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_tool_display"
+                    android:textColor="@color/cam_white_92"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.04"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/displaySub"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/cam_turn_off"
+                    android:textColor="@color/cam_text_50"
+                    android:textSize="9sp"
+                    android:fontFamily="sans-serif"
+                    android:maxLines="1" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 5d. Core row: TOOLS · SETUP · primary CTA. Always present. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Tools toggle with active-count. Open state = bg_cam_light_circle +
+                 dark text, set in code. -->
+            <LinearLayout
+                android:id="@+id/btnTools"
+                android:layout_width="@dimen/cam_btn"
+                android:layout_height="@dimen/cam_btn"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_ghost_circle"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/toolsLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_tools"
+                    android:textColor="@color/cam_text"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:includeFontPadding="false"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/toolsCounter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:textColor="@color/cam_text_55"
+                    android:textSize="9sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.04"
+                    android:fontFeatureSettings="tnum"
+                    android:includeFontPadding="false"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/btnSettings"
+                android:layout_width="@dimen/cam_btn"
+                android:layout_height="@dimen/cam_btn"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_ghost_circle"
+                android:text="@string/cam_setup"
+                android:textColor="@color/cam_text"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- Primary CTA. Label / background / enabled / spinner driven by CtaSpec
+                 in code. XML default = Ready → SCANNING ghost. The spinner carries the
+                 9dp gap so the label stays centred when the spinner is GONE. -->
+            <LinearLayout
+                android:id="@+id/btnCta"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/cam_btn"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_cta_ghost"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ProgressBar
+                    android:id="@+id/ctaSpinner"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:layout_marginEnd="9dp"
+                    android:indeterminate="true"
+                    android:indeterminateTint="@color/cam_text"
+                    android:importantForAccessibility="no"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/ctaLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_cta_scanning"
+                    android:textColor="@color/cam_text_72"
+                    android:textSize="15sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.02"
+                    android:includeFontPadding="false"
+                    android:maxLines="1" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 5e. One-line hint under the core row. -->
+        <TextView
+            android:id="@+id/bottomHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/cam_hint_idle"
+            android:textColor="@color/cam_text_45"
+            android:textSize="10sp"
+            android:fontFamily="sans-serif" />
+    </LinearLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 6 — SHEET SCRIM (tap closes the sheet; listener set in code)
+         ═══════════════════════════════════════════════════════════════════════ -->
     <View
+        android:id="@+id/hudSheetScrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/cam_scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 7 — TELEMETRY SHEET
+         clickable=true so taps inside the sheet never fall through to the scrim.
+         hudSheetScroll height is capped in code to ≤ 82 % of root minus chrome.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/hudSheet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/bg_cam_sheet"
+        android:elevation="12dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <!-- Drag handle (decorative). -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="14dp"
+            android:background="@drawable/bg_cam_sheet_handle"
+            android:importantForAccessibility="no" />
+
+        <!-- Header: title + subtitle, Debug toggle. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/hudSheetTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_sheet_title"
+                    android:textColor="@color/cam_text"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/hudSheetSub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cam_sheet_sub"
+                    android:textColor="@color/cam_text_60"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+
+            <!-- Debug on = bg_cam_pill_light + cam_on_light text, set in code.
+                 minHeight 44dp keeps the touch target accessible. -->
+            <TextView
+                android:id="@+id/btnHudDebug"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:minHeight="@dimen/cam_hud_btn"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_ghost_pill"
+                android:paddingStart="14dp"
+                android:paddingTop="9dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="9dp"
+                android:text="@string/cam_debug"
+                android:textColor="@color/cam_text_80"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif-medium"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- Tab strip. Active tab = bg_cam_tab_active + white text (Stream by default). -->
+        <HorizontalScrollView
+            android:id="@+id/hudTabsScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="18dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="8dp"
+            android:clipToPadding="false"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:id="@+id/hudTabs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/hudTabStream"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="7dp"
+                    android:minHeight="@dimen/cam_hud_btn"
+                    android:gravity="center"
+                    android:background="@drawable/bg_cam_tab_active"
+                    android:paddingStart="14dp"
+                    android:paddingTop="9dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="9dp"
+                    android:text="@string/cam_tab_stream"
+                    android:textColor="@color/cam_text"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/hudTabCamera"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="7dp"
+                    android:minHeight="@dimen/cam_hud_btn"
+                    android:gravity="center"
+                    android:background="@drawable/bg_cam_tab"
+                    android:paddingStart="14dp"
+                    android:paddingTop="9dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="9dp"
+                    android:text="@string/cam_tab_camera"
+                    android:textColor="@color/cam_text_72"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/hudTabNetwork"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="7dp"
+                    android:minHeight="@dimen/cam_hud_btn"
+                    android:gravity="center"
+                    android:background="@drawable/bg_cam_tab"
+                    android:paddingStart="14dp"
+                    android:paddingTop="9dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="9dp"
+                    android:text="@string/cam_tab_network"
+                    android:textColor="@color/cam_text_72"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <TextView
+                    android:id="@+id/hudTabDevice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="@dimen/cam_hud_btn"
+                    android:gravity="center"
+                    android:background="@drawable/bg_cam_tab"
+                    android:paddingStart="14dp"
+                    android:paddingTop="9dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="9dp"
+                    android:text="@string/cam_tab_device"
+                    android:textColor="@color/cam_text_72"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:clickable="true"
+                    android:focusable="true" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- Scrollable rows (item_hud_row.xml → hudSheetRows) + footnote. -->
+        <ScrollView
+            android:id="@+id/hudSheetScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="18dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="16dp"
+            android:scrollbars="none"
+            android:overScrollMode="never">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/hudSheetRows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/hudFootnote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="12dp"
+                    android:text="@string/cam_footnote"
+                    android:textColor="@color/cam_text_38"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- Footer divider + buttons. -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/cam_ghost"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/btnHudHide"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/cam_sheet_btn_h"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_hud_footer_btn"
+                android:text="@string/cam_hide_hud"
+                android:textColor="@color/cam_text"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/btnHudClose"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/cam_sheet_btn_h"
+                android:layout_weight="1.3"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:background="@drawable/bg_cam_cta_blue"
+                android:text="@string/cam_back_to_preview"
+                android:textColor="@color/cam_text"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 8 — IDENTIFY OVERLAY (blue flash from OBS; auto-hides after 3 s)
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <FrameLayout
+        android:id="@+id/identifyOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/cam_identify"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <TextView
+                android:id="@+id/identifyEyebrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/cam_identify_eyebrow"
+                android:textColor="@color/cam_text_72"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.2" />
+
+            <TextView
+                android:id="@+id/identifyLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:gravity="center"
+                android:textColor="@color/cam_text"
+                android:textSize="64sp"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false" />
+
+            <TextView
+                android:id="@+id/identifySubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:maxWidth="300dp"
+                android:gravity="center"
+                android:textColor="@color/cam_text"
+                android:alpha="0.9"
+                android:textSize="16sp"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/identifyFootnote"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="40dp"
+            android:gravity="center"
+            android:text="@string/cam_identify_footnote"
+            android:textColor="@color/cam_text_72"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif" />
+    </FrameLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         LAYER 9 — DISPLAY-OFF OVERLAY (last child so it covers everything;
+         any tap wakes the UI; window brightness is dropped in code)
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <FrameLayout
         android:id="@+id/screenOffOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/os_black"
         android:contentDescription="@string/screen_off_overlay_description"
-        android:visibility="gone"
         android:clickable="true"
-        android:focusable="true" />
+        android:focusable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <!-- Pulsing red dot while live (animated in code). -->
+                <View
+                    android:id="@+id/displayOffDot"
+                    android:layout_width="@dimen/cam_dot"
+                    android:layout_height="@dimen/cam_dot"
+                    android:background="@drawable/bg_cam_dot"
+                    android:backgroundTint="@color/cam_live"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    android:id="@+id/displayOffStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="9dp"
+                    android:text="@string/cam_display_off_idle"
+                    android:textColor="@color/cam_text_72"
+                    android:textSize="13sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:letterSpacing="0.14"
+                    android:fontFeatureSettings="tnum"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/displayOffBody"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:maxWidth="260dp"
+                android:gravity="center"
+                android:text="@string/cam_display_off_body"
+                android:textColor="@color/cam_text_35"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/displayOffWake"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="56dp"
+            android:gravity="center"
+            android:text="@string/cam_display_off_wake"
+            android:textColor="@color/cam_text_55"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium" />
+    </FrameLayout>
 </FrameLayout>

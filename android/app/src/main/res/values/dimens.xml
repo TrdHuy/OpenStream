@@ -35,4 +35,32 @@
     <dimen name="os_border_thin">1dp</dimen>
     
     <dimen name="os_preview_height">0dp</dimen>
+
+    <!-- ── Camera screen (cam_*) ── -->
+    <!-- Padding and gaps -->
+    <dimen name="cam_pad_h">12dp</dimen>
+    <dimen name="cam_pad_top">12dp</dimen>
+    <dimen name="cam_pad_bottom">14dp</dimen>
+    <dimen name="cam_gap">10dp</dimen>
+    <dimen name="cam_gap_lg">12dp</dimen>
+
+    <!-- Control sizes -->
+    <dimen name="cam_btn">56dp</dimen>
+    <dimen name="cam_hud_btn">44dp</dimen>
+    <dimen name="cam_chip_h">44dp</dimen>
+    <dimen name="cam_chip_min_w">52dp</dimen>
+    <dimen name="cam_tile_h">60dp</dimen>
+    <dimen name="cam_sheet_btn_h">50dp</dimen>
+
+    <!-- Corner radii -->
+    <dimen name="cam_radius_card">14dp</dimen>
+    <dimen name="cam_radius_card_lg">18dp</dimen>
+    <dimen name="cam_radius_tile">16dp</dimen>
+    <dimen name="cam_radius_slot">12dp</dimen>
+    <dimen name="cam_radius_sheet">24dp</dimen>
+
+    <!-- Misc -->
+    <dimen name="cam_dot">9dp</dimen>
+    <dimen name="cam_alert_icon">22dp</dimen>
+    <dimen name="cam_glance_min_w">206dp</dimen>
 </resources>

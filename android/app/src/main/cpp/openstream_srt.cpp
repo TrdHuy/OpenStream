@@ -37,6 +37,9 @@ constexpr int kMediaCodecBufferFlagKeyFrame = 1;
 constexpr int kMediaCodecBufferFlagCodecConfig = 2;
 constexpr int kAudioSampleRate = 48000;
 constexpr int kAudioChannelCount = 1;
+// Field layout of the link-statistics sample handed to SrtNativeBridge.sampleStats():
+// [msRTT, pktSentTotal, pktSndLossTotal, pktRetransTotal, mbpsSendRate].
+constexpr int kLinkStatsFieldCount = 5;
 
 void logInfo(const char *message) {
   __android_log_print(ANDROID_LOG_INFO, kTag, "%s", message);
@@ -775,6 +778,35 @@ class NativeSender {
 #endif
   }
 
+  // Copies the live link statistics of the active data socket into `out`
+  // ([msRTT, pktSentTotal, pktSndLossTotal, pktRetransTotal, mbpsSendRate]).
+  // Holds only socketMutex_ (never ioMutex_) so the send worker is not stalled
+  // behind a telemetry read; srt_bistats is a local, non-blocking counter read.
+  // Returns false when there is no socket, libsrt reports an error, or the
+  // library was built without libsrt.
+  bool sampleStats(double out[kLinkStatsFieldCount]) const {
+#if OPENSTREAM_HAVE_LIBSRT
+    std::lock_guard<std::mutex> lock(socketMutex_);
+    const SRTSOCKET socket = socket_;
+    if (socket == SRT_INVALID_SOCK) {
+      return false;
+    }
+    SRT_TRACEBSTATS perf{};
+    if (srt_bistats(socket, &perf, 0 /*clear*/, 1 /*instantaneous*/) == SRT_ERROR) {
+      return false;
+    }
+    out[0] = perf.msRTT;
+    out[1] = static_cast<double>(perf.pktSentTotal);
+    out[2] = static_cast<double>(perf.pktSndLossTotal);
+    out[3] = static_cast<double>(perf.pktRetransTotal);
+    out[4] = perf.mbpsSendRate;
+    return true;
+#else
+    (void)out;
+    return false;
+#endif
+  }
+
  private:
   struct PendingSend {
     uint64_t generation;
@@ -1109,4 +1141,21 @@ Java_com_synclab_airlens_stream_SrtNativeBridge_sendAudio(
     g_state.connected = false;
   }
   return sent ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_com_synclab_airlens_stream_SrtNativeBridge_sampleStats(JNIEnv *env, jobject) {
+  // Telemetry read only: deliberately does not take g_state.mediaMutex so it
+  // never waits behind an in-flight mux/send on the media path.
+  double values[kLinkStatsFieldCount] = {};
+  if (!g_state.sender.sampleStats(values)) {
+    return nullptr;
+  }
+  jdoubleArray result = env->NewDoubleArray(kLinkStatsFieldCount);
+  if (result == nullptr) {
+    // OutOfMemoryError is pending on the JNIEnv; let the caller observe it.
+    return nullptr;
+  }
+  env->SetDoubleArrayRegion(result, 0, kLinkStatsFieldCount, values);
+  return result;
 }

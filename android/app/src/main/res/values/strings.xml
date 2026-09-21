@@ -229,4 +229,241 @@
 
     <!-- Footer -->
     <string name="st_version_footer">AirLens v%1$s (%2$s) · About</string>
+
+    <!-- ============ Camera screen redesign (cam_* / hud_*) ============ -->
+    <!-- Status pill and HUD chrome -->
+    <string name="cam_hud" translatable="false">HUD</string>
+    <string name="cam_hud_live_title">LIVE HUD</string>
+    <string name="cam_hud_tap_for_all">Tap for all ›</string>
+
+    <!-- Connection states -->
+    <string name="cam_state_ready">Ready</string>
+    <string name="cam_state_ready_detail">Searching for OBS on this network</string>
+    <string name="cam_state_paired">Paired to %1$s</string>
+    <string name="cam_state_paired_detail">Waiting for OBS to go live</string>
+    <string name="cam_state_connecting">Connecting…</string>
+    <string name="cam_state_connecting_detail" translatable="false">%1$s → %2$s</string>
+    <string name="cam_state_live">LIVE</string>
+    <string name="cam_state_live_detail" translatable="false">%1$s · %2$s</string>
+    <string name="cam_state_lost">Connection lost</string>
+    <string name="cam_state_lost_detail">Last frame %1$d s ago · %2$s</string>
+    <string name="cam_state_lost_detail_nofix">Waiting for OBS · %1$s</string>
+    <string name="cam_state_reconnecting">Reconnecting…</string>
+    <string name="cam_state_reconnecting_detail">Attempt %1$d · retry in %2$d s</string>
+    <string name="cam_state_recovered_detail">Recovered · %1$d drops this session</string>
+    <string name="cam_state_stopped">Stopped</string>
+    <string name="cam_state_stopped_detail">Camera preview remains active</string>
+    <string name="cam_state_listener_error">Listener error</string>
+    <string name="cam_state_encoder_error">Encoder error</string>
+    <string name="cam_state_send_issue">Send issue</string>
+    <string name="cam_state_waiting_frames">Waiting for frames…</string>
+    <string name="cam_state_holding">Holding %1$s for reconnect</string>
+
+    <!-- Alert banner -->
+    <string name="cam_alert_lost_title">OBS stopped receiving</string>
+    <string name="cam_alert_lost_body">Transport dropped. Your slot is held for %1$d s — retry now or wait for OBS to reconnect.</string>
+    <string name="cam_alert_lost_action">Retry</string>
+    <string name="cam_alert_reconnecting_title">Reconnecting to %1$s</string>
+    <string name="cam_alert_reconnecting_body">Attempt %1$d · backing off to %2$d s.</string>
+    <string name="cam_alert_reconnecting_action">Cancel</string>
+    <string name="cam_alert_thermal_title">Device getting hot — %1$s</string>
+    <string name="cam_alert_thermal_body">Thermal status %1$s. The encoder will drop frames before it throttles. Lower the resolution or cool the phone.</string>
+    <string name="cam_alert_thermal_action">Fix</string>
+    <string name="cam_alert_recovered_title">Stream recovered</string>
+    <string name="cam_alert_recovered_body">Reconnected after %1$d s. OBS is receiving frames again.</string>
+    <string name="cam_alert_recovered_action">Dismiss</string>
+
+    <!-- Primary CTA -->
+    <string name="cam_cta_scanning">SCANNING</string>
+    <string name="cam_cta_go_live">GO LIVE</string>
+    <string name="cam_cta_connecting">CONNECTING</string>
+    <string name="cam_cta_stop">STOP</string>
+    <string name="cam_cta_reconnect">RECONNECT</string>
+    <string name="cam_cta_cancel_retry">CANCEL RETRY</string>
+
+    <!-- Core row and tools tiles -->
+    <string name="cam_tools">TOOLS</string>
+    <string name="cam_tools_count">%1$d ON</string>
+    <string name="cam_setup">SETUP</string>
+    <string name="cam_tool_torch">TORCH</string>
+    <string name="cam_tool_flip">FLIP</string>
+    <string name="cam_tool_stay">STAY</string>
+    <string name="cam_tool_display">DISPLAY</string>
+    <string name="cam_on">On</string>
+    <string name="cam_off">Off</string>
+    <string name="cam_front">Front</string>
+    <string name="cam_back">Back</string>
+    <string name="cam_awake">Awake</string>
+    <string name="cam_auto">Auto</string>
+    <string name="cam_turn_off">Turn off</string>
+
+    <!-- OBS slots panel -->
+    <string name="cam_slots_title">OBS CAMERA SLOTS</string>
+    <string name="cam_slots_scanning">Scanning…</string>
+    <string name="cam_slots_found">%1$d found</string>
+    <string name="cam_slots_none">No OBS camera slots found yet</string>
+    <string name="cam_slot_sub_free">OBS · %1$s · free</string>
+    <string name="cam_slot_sub_busy">In use by another phone</string>
+    <string name="cam_slot_sub_reserved">Reserved for this phone</string>
+    <string name="cam_slot_use">Use</string>
+    <string name="cam_slot_busy">Busy</string>
+    <string name="cam_slot_paired">Paired</string>
+    <string name="cam_slot_live">Live</string>
+
+    <!-- Lens chips -->
+    <string name="cam_lens_ultra">ULTRA</string>
+    <string name="cam_lens_main">MAIN</string>
+    <string name="cam_lens_tele" translatable="false">TELE</string>
+    <string name="cam_lens_front">FRONT</string>
+    <string name="cam_lens_name_main">Back main</string>
+    <string name="cam_lens_name_ultra">Back ultrawide</string>
+    <string name="cam_lens_name_tele">Back tele</string>
+    <string name="cam_lens_name_front">Front</string>
+
+    <!-- Bottom hints -->
+    <string name="cam_hint_live">Tap HUD for details · TOOLS holds torch, flip and keep-awake</string>
+    <string name="cam_hint_idle">TOOLS holds torch, flip, keep-awake and display-off</string>
+
+    <!-- Telemetry sheet -->
+    <string name="cam_sheet_title">Telemetry</string>
+    <string name="cam_sheet_sub">Operating values · Debug adds counters and IDs</string>
+    <string name="cam_sheet_sub_debug">All fields including diagnostics</string>
+    <string name="cam_debug" translatable="false">Debug</string>
+    <string name="cam_tab_stream">Stream</string>
+    <string name="cam_tab_camera" translatable="false">Camera</string>
+    <string name="cam_tab_network">Network</string>
+    <string name="cam_tab_device">Device</string>
+    <string name="cam_footnote">Turn on Debug for frame counters, reconnect history, encoder state and target URL.</string>
+    <string name="cam_footnote_debug">Diagnostics are sampled once per second and never written to disk.</string>
+    <string name="cam_hide_hud">Hide HUD</string>
+    <string name="cam_back_to_preview">Back to preview</string>
+
+    <!-- Identify and display-off overlays -->
+    <string name="cam_identify_eyebrow">IDENTIFY</string>
+    <string name="cam_identify_footnote">Triggered from OBS · clears in 3 s</string>
+    <string name="cam_display_off_live">LIVE · %1$s</string>
+    <string name="cam_display_off_idle">DISPLAY OFF</string>
+    <string name="cam_display_off_body">Display off to save battery. Camera and stream keep running.</string>
+    <string name="cam_display_off_wake">Tap anywhere to wake the UI</string>
+
+    <!-- HUD sheet row keys -->
+    <string name="hud_k_bitrate" translatable="false">Bitrate</string>
+    <string name="hud_k_framerate">Frame rate</string>
+    <string name="hud_k_resolution">Resolution</string>
+    <string name="hud_k_codec" translatable="false">Codec</string>
+    <string name="hud_k_duration">Stream duration</string>
+    <string name="hud_k_video_frames">Video frames sent</string>
+    <string name="hud_k_keyframes">Keyframes sent</string>
+    <string name="hud_k_audio_frames">Audio frames sent</string>
+    <string name="hud_k_encoder_state">Encoder state</string>
+    <string name="hud_k_lens">Lens</string>
+    <string name="hud_k_zoom" translatable="false">Zoom</string>
+    <string name="hud_k_iso" translatable="false">ISO</string>
+    <string name="hud_k_shutter">Shutter</string>
+    <string name="hud_k_aperture">Aperture</string>
+    <string name="hud_k_focus">Focus</string>
+    <string name="hud_k_exposure_state">Exposure state</string>
+    <string name="hud_k_white_balance">White balance</string>
+    <string name="hud_k_ev">EV compensation</string>
+    <string name="hud_k_focal_length">Focal length</string>
+    <string name="hud_k_frame_timing">Frame timing</string>
+    <string name="hud_k_wifi" translatable="false">Wi-Fi</string>
+    <string name="hud_k_link_quality">Link quality</string>
+    <string name="hud_k_srt_rtt">SRT round-trip</string>
+    <string name="hud_k_packet_loss">Packet loss</string>
+    <string name="hud_k_network_type">Network type</string>
+    <string name="hud_k_reconnects">Reconnects</string>
+    <string name="hud_k_connection_losses">Connection losses</string>
+    <string name="hud_k_target">Target</string>
+    <string name="hud_k_battery">Battery</string>
+    <string name="hud_k_temperature">Temperature</string>
+    <string name="hud_k_thermal">Thermal status</string>
+    <string name="hud_k_microphone">Microphone</string>
+    <string name="hud_k_audio_level">Audio level</string>
+    <string name="hud_k_keep_screen_on">Keep screen on</string>
+    <string name="hud_k_device">Device</string>
+
+    <!-- HUD glance keys -->
+    <string name="hud_g_bitrate" translatable="false">Bitrate</string>
+    <string name="hud_g_fps" translatable="false">FPS</string>
+    <string name="hud_g_rtt" translatable="false">RTT</string>
+    <string name="hud_g_wifi" translatable="false">Wi-Fi</string>
+    <string name="hud_g_battery">Battery</string>
+    <string name="hud_g_temp">Temp</string>
+    <string name="hud_g_loss">Loss</string>
+
+    <!-- HUD row notes -->
+    <string name="hud_n_target">target %1$d Mbps</string>
+    <string name="hud_n_actual_target">actual / target</string>
+    <string name="hud_n_every">every %1$d s</string>
+    <string name="hud_n_exposure_time">exposure time</string>
+    <string name="hud_n_camera_id">camera id %1$s</string>
+    <string name="hud_n_jitter">jitter %1$s ms</string>
+    <string name="hud_n_wifi_weak">weak — move closer to the AP</string>
+    <string name="hud_n_wifi_excellent">%1$s · excellent</string>
+    <string name="hud_n_wifi_good">%1$s · good</string>
+    <string name="hud_n_wifi_fair">%1$s · fair</string>
+    <string name="hud_n_thermal_severe">frames will drop before throttling</string>
+    <string name="hud_n_battery_estimate">%1$s · ~%2$d min at %3$s</string>
+    <string name="hud_n_peak">peak %1$s dBFS</string>
+
+    <!-- HUD row values -->
+    <string name="hud_v_streaming">streaming</string>
+    <string name="hud_v_stalled">stalled</string>
+    <string name="hud_v_disconnected">disconnected</string>
+    <string name="hud_v_idle">idle</string>
+    <string name="hud_v_af_locked">AF locked</string>
+    <string name="hud_v_af_scanning">AF scanning</string>
+    <string name="hud_v_af_focused">AF focused</string>
+    <string name="hud_v_af_unfocused">AF not focused</string>
+    <string name="hud_v_af_inactive">AF inactive</string>
+    <string name="hud_v_ae_converged">AE converged</string>
+    <string name="hud_v_ae_searching">AE searching</string>
+    <string name="hud_v_ae_locked">AE locked</string>
+    <string name="hud_v_ae_flash">Flash required</string>
+    <string name="hud_v_ae_inactive">AE inactive</string>
+    <string name="hud_v_awb_converged">AWB converged</string>
+    <string name="hud_v_awb_searching">AWB searching</string>
+    <string name="hud_v_awb_locked">AWB locked</string>
+    <string name="hud_v_awb_inactive">AWB inactive</string>
+    <string name="hud_v_good">Good</string>
+    <string name="hud_v_fair">Fair</string>
+    <string name="hud_v_poor">Poor</string>
+    <string name="hud_v_discharging">discharging</string>
+    <string name="hud_v_charging">charging</string>
+    <string name="hud_v_mic_active">Active · %1$s</string>
+    <string name="hud_v_mic_off">Off</string>
+    <string name="hud_v_mic_no_permission">No permission</string>
+    <string name="hud_v_on">On</string>
+    <string name="hud_v_off">Off</string>
+    <string name="hud_v_mono" translatable="false">mono</string>
+    <string name="hud_v_stereo" translatable="false">stereo</string>
+    <string name="hud_v_infinity" translatable="false">∞</string>
+    <string name="hud_v_na" translatable="false">—</string>
+
+    <!-- HUD value formats and network type labels -->
+    <string name="hud_f_mbps" translatable="false">%1$s Mbps</string>
+    <string name="hud_f_fps_pair" translatable="false">%1$s / %2$d fps</string>
+    <string name="hud_f_ms" translatable="false">%1$s ms</string>
+    <string name="hud_f_ms_avg">%1$s ms avg</string>
+    <string name="hud_f_percent" translatable="false">%1$s %%</string>
+    <string name="hud_f_dbm" translatable="false">%1$d dBm</string>
+    <string name="hud_f_celsius" translatable="false">%1$s °C</string>
+    <string name="hud_f_shutter" translatable="false">1/%1$d s</string>
+    <string name="hud_f_seconds" translatable="false">%1$s s</string>
+    <string name="hud_f_aperture" translatable="false">ƒ/%1$s</string>
+    <string name="hud_f_metres" translatable="false">%1$s m</string>
+    <string name="hud_f_resolution" translatable="false">%1$d × %2$d</string>
+    <string name="hud_f_zoom" translatable="false">%1$s×</string>
+    <string name="hud_f_khz_channels" translatable="false">%1$d kHz %2$s</string>
+    <string name="hud_f_dbfs" translatable="false">%1$s dBFS</string>
+    <string name="hud_f_mm_eq">%1$d mm eq.</string>
+    <string name="hud_f_network_wifi" translatable="false">Wi-Fi %1$s</string>
+    <string name="hud_v_cellular">Cellular</string>
+    <string name="hud_v_ethernet" translatable="false">Ethernet</string>
+    <string name="hud_v_offline">Offline</string>
+    <string name="hud_f_band_ghz" translatable="false">%1$s GHz</string>
+
+    <!-- Stream info chip (instrumentation contract: R.id.streamInfoChip) -->
+    <string name="stream_info_chip_format" translatable="false">%1$d f · %2$d kf · %3$.1f Mb</string>
 </resources>

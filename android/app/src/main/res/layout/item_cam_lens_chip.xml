@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AirLens — one lens chip (lensSelectorRow). One chip per available CameraLens:
+  ".5 ULTRA" · "1 MAIN" · "2 TELE" · "⟲ FRONT".
+  Inactive (XML default): bg_cam_pill, cam_white_92 label, cam_text_50 sub.
+  Active (set in code): bg_cam_pill_light, cam_on_light label, cam_on_light_60 sub.
+  The glyph label is not self-describing, so code should set contentDescription to the
+  lens name (cam_lens_name_*). Height is the 44dp touch-target minimum.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/lensChip"
+    android:layout_width="wrap_content"
+    android:layout_height="@dimen/cam_chip_h"
+    android:layout_marginEnd="8dp"
+    android:minWidth="@dimen/cam_chip_min_w"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@drawable/bg_cam_pill"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <TextView
+        android:id="@+id/lensChipLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/cam_white_92"
+        android:textSize="13sp"
+        android:fontFamily="sans-serif-medium"
+        android:fontFeatureSettings="tnum"
+        android:includeFontPadding="false"
+        android:maxLines="1" />
+
+    <TextView
+        android:id="@+id/lensChipSub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:textColor="@color/cam_text_50"
+        android:textSize="9sp"
+        android:fontFamily="sans-serif"
+        android:letterSpacing="0.04"
+        android:includeFontPadding="false"
+        android:maxLines="1" />
+</LinearLayout>

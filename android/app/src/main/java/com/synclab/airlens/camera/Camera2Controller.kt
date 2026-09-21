@@ -8,10 +8,13 @@ import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
 import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.TotalCaptureResult
 import android.hardware.camera2.CameraCharacteristics
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.util.Log
 import android.util.Range
 import android.view.Surface
@@ -26,6 +29,7 @@ import java.util.concurrent.atomic.AtomicLong
  * - Creating preview-only, encode-only or preview+encode sessions.
  * - Pinch-to-zoom via crop region or CONTROL_ZOOM_RATIO.
  * - Enumerating available physical lenses.
+ * - Publishing a throttled per-frame metadata snapshot ([frameMetadata]) for the HUD.
  */
 class Camera2Controller(
     private val context: Context,
@@ -37,9 +41,9 @@ class Camera2Controller(
     private val thread = HandlerThread("OpenStreamCamera")
     private lateinit var handler: Handler
     private var camera: CameraDevice? = null
-    private var session: CameraCaptureSession? = null
+    @Volatile private var session: CameraCaptureSession? = null
     private var streamingSurface: Surface? = null
-    private var activeCameraId: String? = null
+    @Volatile private var activeCameraId: String? = null
     private var activeLens: CameraLens? = null
     private val cameraGeneration = AtomicLong()
     private val sessionGeneration = AtomicLong()
@@ -59,13 +63,53 @@ class Camera2Controller(
     // Torch state
     private var torchEnabled = false
 
+    // Frame metadata (HUD telemetry). The snapshot is the only field read off the
+    // camera thread; everything else below is confined to the camera handler thread.
+    @Volatile private var latestFrameMetadata: CameraFrameMetadata? = null
+    private val frameTiming = FrameTimingMeter()
+    private var timingSession: CameraCaptureSession? = null
+    private var lastMetadataPublishNs = NEVER_PUBLISHED_NS
+    private var metadataCameraId: String? = null
+    private var metadataFocalLength35mmEq: Int? = null
+    private var metadataEvStepNumerator: Int? = null
+    private var metadataEvStepDenominator: Int? = null
+
     /** Zoom value as a fraction [minZoom, maxZoom]. */
     val zoomRatio: Float get() = synchronized(lifecycleLock) { currentZoomRatio }
     val zoomRange: ClosedFloatingPointRange<Float>
         get() = synchronized(lifecycleLock) { minZoomRatio..maxZoomRatio }
 
+    /**
+     * Camera id the controller is currently opened on (or opening), null when stopped.
+     * Lock-free so telemetry samplers never wait on the camera lifecycle.
+     */
+    val activeCameraIdOrNull: String? get() = activeCameraId
+
+    /**
+     * Latest per-frame metadata snapshot, at most ~[METADATA_PUBLISH_INTERVAL_NS] old.
+     * Thread-safe and non-blocking; null when no capture session is producing frames.
+     */
+    fun frameMetadata(): CameraFrameMetadata? = latestFrameMetadata
+
+    /**
+     * Single CaptureCallback shared by every repeating request (session creation and
+     * rebuilds). Dispatched on the camera handler thread and does O(1) work per frame.
+     */
+    private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
+        override fun onCaptureCompleted(
+            session: CameraCaptureSession,
+            request: CaptureRequest,
+            result: TotalCaptureResult,
+        ) {
+            onFrameCompleted(session, result)
+        }
+    }
+
     companion object {
         private const val TAG = "OpenStreamCamera"
+        /** Minimum spacing between two published [CameraFrameMetadata] snapshots. */
+        private const val METADATA_PUBLISH_INTERVAL_NS = 250_000_000L
+        private const val NEVER_PUBLISHED_NS = Long.MIN_VALUE
     }
 
     /**
@@ -294,6 +338,7 @@ class Camera2Controller(
         camera?.close()
         session = null
         camera = null
+        latestFrameMetadata = null
     }
 
     private fun watchForCameraAvailability(cameraId: String) {
@@ -345,6 +390,7 @@ class Camera2Controller(
 
     private fun loadZoomCapabilities(cameraId: String) {
         val chars = cameraManager.getCameraCharacteristics(cameraId)
+        cacheFrameMetadataStatics(cameraId, chars)
         val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
         Log.i(
             TAG,
@@ -400,6 +446,7 @@ class Camera2Controller(
             sessionGeneration.incrementAndGet()
             session?.close()
             session = null
+            latestFrameMetadata = null
             Log.w(TAG, "Deferring camera session until a preview or encoder surface is valid")
             return
         }
@@ -410,6 +457,7 @@ class Camera2Controller(
         val surfaces = listOfNotNull(preview, encoded)
         session?.close()
         session = null
+        latestFrameMetadata = null
         try {
             @Suppress("DEPRECATION")
             device.createCaptureSession(
@@ -439,7 +487,7 @@ class Camera2Controller(
                                     applyZoom(this)
                                     applyTorch(this)
                                 }.build()
-                                captureSession.setRepeatingRequest(request, null, handler)
+                                captureSession.setRepeatingRequest(request, captureCallback, handler)
                             }.onFailure { error ->
                                 if (sessionGeneration.get() == generation && camera === device) {
                                     recoverFromSessionFailure(
@@ -557,7 +605,7 @@ class Camera2Controller(
                 applyZoom(this)
                 applyTorch(this)
             }.build()
-            currentSession.setRepeatingRequest(request, null, handler)
+            currentSession.setRepeatingRequest(request, captureCallback, handler)
         }.onFailure { error ->
             val current = sessionGeneration.get() == generation &&
                 camera === device &&
@@ -577,6 +625,84 @@ class Camera2Controller(
 
     private fun updateZoomInSession() {
         rebuildRepeatingRequest()
+    }
+
+    /**
+     * Reads the static per-camera values the metadata snapshot needs once per open,
+     * reusing the characteristics already fetched for zoom capabilities.
+     */
+    private fun cacheFrameMetadataStatics(cameraId: String, chars: CameraCharacteristics) {
+        val focalMm = chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.firstOrNull()
+        val physicalSize = chars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+        val evStep = chars.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP)
+        metadataCameraId = cameraId
+        metadataFocalLength35mmEq = if (focalMm != null && physicalSize != null) {
+            focalLength35mmEquivalent(focalMm, physicalSize.width, physicalSize.height)
+        } else {
+            null
+        }
+        metadataEvStepNumerator = evStep?.numerator
+        metadataEvStepDenominator = evStep?.denominator
+    }
+
+    /**
+     * Per-frame hot path. Runs on the camera handler thread without taking
+     * [lifecycleLock]: it only touches thread-confined timing state plus the
+     * volatile snapshot, and allocates one [CameraFrameMetadata] per publish window.
+     */
+    private fun onFrameCompleted(captureSession: CameraCaptureSession, result: TotalCaptureResult) {
+        // Late results from a session that has already been replaced or closed.
+        if (captureSession !== session) return
+        if (captureSession !== timingSession) {
+            timingSession = captureSession
+            frameTiming.reset()
+            lastMetadataPublishNs = NEVER_PUBLISHED_NS
+        }
+
+        val sensorTimestampNs = result.get(CaptureResult.SENSOR_TIMESTAMP)
+        if (sensorTimestampNs != null) frameTiming.onFrame(sensorTimestampNs)
+
+        val nowNs = sensorTimestampNs ?: SystemClock.elapsedRealtimeNanos()
+        if (lastMetadataPublishNs != NEVER_PUBLISHED_NS &&
+            nowNs - lastMetadataPublishNs < METADATA_PUBLISH_INTERVAL_NS
+        ) {
+            return
+        }
+        lastMetadataPublishNs = nowNs
+
+        latestFrameMetadata = CameraFrameMetadata(
+            timestampNs = nowNs,
+            cameraId = metadataCameraId,
+            iso = result.get(CaptureResult.SENSOR_SENSITIVITY),
+            exposureTimeNs = result.get(CaptureResult.SENSOR_EXPOSURE_TIME),
+            aperture = result.get(CaptureResult.LENS_APERTURE),
+            focalLengthMm = result.get(CaptureResult.LENS_FOCAL_LENGTH),
+            focalLength35mmEq = metadataFocalLength35mmEq,
+            afState = result.get(CaptureResult.CONTROL_AF_STATE),
+            aeState = result.get(CaptureResult.CONTROL_AE_STATE),
+            awbState = result.get(CaptureResult.CONTROL_AWB_STATE),
+            focusDistanceDiopters = result.get(CaptureResult.LENS_FOCUS_DISTANCE),
+            zoomRatio = resultZoomRatio(result),
+            evCompensationSteps = result.get(CaptureResult.CONTROL_AE_EXPOSURE_COMPENSATION),
+            evStepNumerator = metadataEvStepNumerator,
+            evStepDenominator = metadataEvStepDenominator,
+            frameIntervalMsAvg = frameTiming.frameIntervalMsAvg,
+            frameJitterMs = frameTiming.frameJitterMs,
+        )
+    }
+
+    /**
+     * Effective zoom reported by the HAL: CONTROL_ZOOM_RATIO on API 30+, otherwise
+     * derived from the crop region against the active array (the API 29 zoom path).
+     */
+    private fun resultZoomRatio(result: TotalCaptureResult): Float? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            result.get(CaptureResult.CONTROL_ZOOM_RATIO)?.let { return it }
+        }
+        val crop = result.get(CaptureResult.SCALER_CROP_REGION) ?: return null
+        val sensor = sensorRect ?: return null
+        if (crop.width() <= 0) return null
+        return sensor.width().toFloat() / crop.width()
     }
 
     private fun selectCameraId(lens: CameraLens): String {

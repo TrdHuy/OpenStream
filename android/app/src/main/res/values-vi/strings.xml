@@ -229,4 +229,202 @@
 
     <!-- Footer -->
     <string name="st_version_footer">AirLens v%1$s (%2$s) · Giới thiệu</string>
+
+    <!-- ============ Camera screen redesign (cam_* / hud_*) ============ -->
+    <!-- Status pill and HUD chrome -->
+    <string name="cam_hud_live_title">HUD TRỰC TIẾP</string>
+    <string name="cam_hud_tap_for_all">Chạm để xem tất cả ›</string>
+
+    <!-- Connection states -->
+    <string name="cam_state_ready">Sẵn sàng</string>
+    <string name="cam_state_ready_detail">Đang tìm OBS trong mạng này</string>
+    <string name="cam_state_paired">Đã ghép với %1$s</string>
+    <string name="cam_state_paired_detail">Đang chờ OBS phát</string>
+    <string name="cam_state_connecting">Đang kết nối…</string>
+    <string name="cam_state_live">TRỰC TIẾP</string>
+    <string name="cam_state_lost">Mất kết nối</string>
+    <string name="cam_state_lost_detail">Khung hình cuối %1$d s trước · %2$s</string>
+    <string name="cam_state_lost_detail_nofix">Đang chờ OBS · %1$s</string>
+    <string name="cam_state_reconnecting">Đang kết nối lại…</string>
+    <string name="cam_state_reconnecting_detail">Lần %1$d · thử lại sau %2$d s</string>
+    <string name="cam_state_recovered_detail">Đã khôi phục · %1$d lần rớt phiên này</string>
+    <string name="cam_state_stopped">Đã dừng</string>
+    <string name="cam_state_stopped_detail">Xem trước camera vẫn hoạt động</string>
+    <string name="cam_state_listener_error">Lỗi lắng nghe</string>
+    <string name="cam_state_encoder_error">Lỗi bộ mã hóa</string>
+    <string name="cam_state_send_issue">Lỗi gửi</string>
+    <string name="cam_state_waiting_frames">Đang chờ khung hình…</string>
+    <string name="cam_state_holding">Đang giữ %1$s để kết nối lại</string>
+
+    <!-- Alert banner -->
+    <string name="cam_alert_lost_title">OBS ngừng nhận</string>
+    <string name="cam_alert_lost_body">Đường truyền bị rớt. Slot được giữ trong %1$d s — thử lại ngay hoặc chờ OBS kết nối lại.</string>
+    <string name="cam_alert_lost_action">Thử lại</string>
+    <string name="cam_alert_reconnecting_title">Đang kết nối lại với %1$s</string>
+    <string name="cam_alert_reconnecting_body">Lần %1$d · giãn cách %2$d s.</string>
+    <string name="cam_alert_reconnecting_action">Hủy</string>
+    <string name="cam_alert_thermal_title">Máy đang nóng — %1$s</string>
+    <string name="cam_alert_thermal_body">Trạng thái nhiệt %1$s. Bộ mã hóa sẽ rớt khung hình trước khi bị bóp. Hạ độ phân giải hoặc làm mát máy.</string>
+    <string name="cam_alert_thermal_action">Xử lý</string>
+    <string name="cam_alert_recovered_title">Luồng đã khôi phục</string>
+    <string name="cam_alert_recovered_body">Kết nối lại sau %1$d s. OBS đang nhận khung hình.</string>
+    <string name="cam_alert_recovered_action">Đóng</string>
+
+    <!-- Primary CTA -->
+    <string name="cam_cta_scanning">ĐANG QUÉT</string>
+    <string name="cam_cta_go_live">PHÁT</string>
+    <string name="cam_cta_connecting">ĐANG KẾT NỐI</string>
+    <string name="cam_cta_stop">DỪNG</string>
+    <string name="cam_cta_reconnect">KẾT NỐI LẠI</string>
+    <string name="cam_cta_cancel_retry">HỦY THỬ LẠI</string>
+
+    <!-- Core row and tools tiles -->
+    <string name="cam_tools">CÔNG CỤ</string>
+    <string name="cam_tools_count">%1$d BẬT</string>
+    <string name="cam_setup">THIẾT LẬP</string>
+    <string name="cam_tool_torch">ĐÈN</string>
+    <string name="cam_tool_flip">LẬT</string>
+    <string name="cam_tool_stay">GIỮ</string>
+    <string name="cam_tool_display">MÀN HÌNH</string>
+    <string name="cam_on">Bật</string>
+    <string name="cam_off">Tắt</string>
+    <string name="cam_front">Trước</string>
+    <string name="cam_back">Sau</string>
+    <string name="cam_awake">Luôn sáng</string>
+    <string name="cam_auto">Tự động</string>
+    <string name="cam_turn_off">Tắt</string>
+
+    <!-- OBS slots panel -->
+    <string name="cam_slots_title">SLOT CAMERA OBS</string>
+    <string name="cam_slots_scanning">Đang quét…</string>
+    <string name="cam_slots_found">Tìm thấy %1$d</string>
+    <string name="cam_slots_none">Chưa tìm thấy slot camera OBS</string>
+    <string name="cam_slot_sub_free">OBS · %1$s · trống</string>
+    <string name="cam_slot_sub_busy">Đang được máy khác dùng</string>
+    <string name="cam_slot_sub_reserved">Đã giữ cho máy này</string>
+    <string name="cam_slot_use">Dùng</string>
+    <string name="cam_slot_busy">Bận</string>
+    <string name="cam_slot_paired">Đã ghép</string>
+    <string name="cam_slot_live">Đang phát</string>
+
+    <!-- Lens chips -->
+    <string name="cam_lens_ultra">SIÊU RỘNG</string>
+    <string name="cam_lens_main">CHÍNH</string>
+    <string name="cam_lens_front">TRƯỚC</string>
+    <string name="cam_lens_name_main">Camera sau chính</string>
+    <string name="cam_lens_name_ultra">Camera sau siêu rộng</string>
+    <string name="cam_lens_name_tele">Camera sau tele</string>
+    <string name="cam_lens_name_front">Camera trước</string>
+
+    <!-- Bottom hints -->
+    <string name="cam_hint_live">Chạm HUD để xem chi tiết · CÔNG CỤ chứa đèn, lật camera, giữ màn hình</string>
+    <string name="cam_hint_idle">CÔNG CỤ chứa đèn pin, lật camera, giữ màn hình, tắt màn hình</string>
+
+    <!-- Telemetry sheet -->
+    <string name="cam_sheet_title">Đo đạc</string>
+    <string name="cam_sheet_sub">Giá trị vận hành · Debug thêm bộ đếm và ID</string>
+    <string name="cam_sheet_sub_debug">Tất cả trường kể cả chẩn đoán</string>
+    <string name="cam_tab_stream">Luồng</string>
+    <string name="cam_tab_network">Mạng</string>
+    <string name="cam_tab_device">Thiết bị</string>
+    <string name="cam_footnote">Bật Debug để xem bộ đếm khung hình, lịch sử kết nối lại, trạng thái encoder và URL đích.</string>
+    <string name="cam_footnote_debug">Chẩn đoán được lấy mẫu mỗi giây và không ghi ra đĩa.</string>
+    <string name="cam_hide_hud">Ẩn HUD</string>
+    <string name="cam_back_to_preview">Về xem trước</string>
+
+    <!-- Identify and display-off overlays -->
+    <string name="cam_identify_eyebrow">NHẬN DIỆN</string>
+    <string name="cam_identify_footnote">Kích hoạt từ OBS · tự ẩn sau 3 s</string>
+    <string name="cam_display_off_live">TRỰC TIẾP · %1$s</string>
+    <string name="cam_display_off_idle">ĐÃ TẮT MÀN HÌNH</string>
+    <string name="cam_display_off_body">Tắt màn hình để tiết kiệm pin. Camera và luồng vẫn chạy.</string>
+    <string name="cam_display_off_wake">Chạm bất kỳ đâu để bật lại giao diện</string>
+
+    <!-- HUD sheet row keys -->
+    <string name="hud_k_framerate">Tốc độ khung</string>
+    <string name="hud_k_resolution">Độ phân giải</string>
+    <string name="hud_k_duration">Thời lượng phát</string>
+    <string name="hud_k_video_frames">Khung video đã gửi</string>
+    <string name="hud_k_keyframes">Keyframe đã gửi</string>
+    <string name="hud_k_audio_frames">Khung audio đã gửi</string>
+    <string name="hud_k_encoder_state">Trạng thái encoder</string>
+    <string name="hud_k_lens">Ống kính</string>
+    <string name="hud_k_shutter">Màn trập</string>
+    <string name="hud_k_aperture">Khẩu độ</string>
+    <string name="hud_k_focus">Lấy nét</string>
+    <string name="hud_k_exposure_state">Trạng thái phơi sáng</string>
+    <string name="hud_k_white_balance">Cân bằng trắng</string>
+    <string name="hud_k_ev">Bù EV</string>
+    <string name="hud_k_focal_length">Tiêu cự</string>
+    <string name="hud_k_frame_timing">Nhịp khung hình</string>
+    <string name="hud_k_link_quality">Chất lượng kết nối</string>
+    <string name="hud_k_srt_rtt">Độ trễ SRT</string>
+    <string name="hud_k_packet_loss">Mất gói</string>
+    <string name="hud_k_network_type">Loại mạng</string>
+    <string name="hud_k_reconnects">Kết nối lại</string>
+    <string name="hud_k_connection_losses">Lần mất kết nối</string>
+    <string name="hud_k_target">Đích</string>
+    <string name="hud_k_battery">Pin</string>
+    <string name="hud_k_temperature">Nhiệt độ</string>
+    <string name="hud_k_thermal">Trạng thái nhiệt</string>
+    <string name="hud_k_microphone">Micro</string>
+    <string name="hud_k_audio_level">Mức âm</string>
+    <string name="hud_k_keep_screen_on">Giữ màn hình sáng</string>
+    <string name="hud_k_device">Thiết bị</string>
+
+    <!-- HUD glance keys -->
+    <string name="hud_g_battery">Pin</string>
+    <string name="hud_g_temp">Nhiệt</string>
+    <string name="hud_g_loss">Mất gói</string>
+
+    <!-- HUD row notes -->
+    <string name="hud_n_target">mục tiêu %1$d Mbps</string>
+    <string name="hud_n_actual_target">thực tế / mục tiêu</string>
+    <string name="hud_n_every">mỗi %1$d s</string>
+    <string name="hud_n_exposure_time">thời gian phơi sáng</string>
+    <string name="hud_n_camera_id">id camera %1$s</string>
+    <string name="hud_n_jitter">độ rung %1$s ms</string>
+    <string name="hud_n_wifi_weak">yếu — lại gần điểm phát</string>
+    <string name="hud_n_wifi_excellent">%1$s · rất tốt</string>
+    <string name="hud_n_wifi_good">%1$s · tốt</string>
+    <string name="hud_n_wifi_fair">%1$s · trung bình</string>
+    <string name="hud_n_thermal_severe">khung hình sẽ rớt trước khi bị bóp</string>
+    <string name="hud_n_battery_estimate">%1$s · ~%2$d phút ở %3$s</string>
+    <string name="hud_n_peak">đỉnh %1$s dBFS</string>
+
+    <!-- HUD row values -->
+    <string name="hud_v_streaming">đang phát</string>
+    <string name="hud_v_stalled">đình trệ</string>
+    <string name="hud_v_disconnected">đã ngắt</string>
+    <string name="hud_v_idle">chờ</string>
+    <string name="hud_v_af_locked">AF đã khóa</string>
+    <string name="hud_v_af_scanning">AF đang quét</string>
+    <string name="hud_v_af_focused">AF đã nét</string>
+    <string name="hud_v_af_unfocused">AF chưa nét</string>
+    <string name="hud_v_af_inactive">AF không hoạt động</string>
+    <string name="hud_v_ae_converged">AE ổn định</string>
+    <string name="hud_v_ae_searching">AE đang dò</string>
+    <string name="hud_v_ae_locked">AE đã khóa</string>
+    <string name="hud_v_ae_flash">Cần flash</string>
+    <string name="hud_v_ae_inactive">AE không hoạt động</string>
+    <string name="hud_v_awb_converged">AWB ổn định</string>
+    <string name="hud_v_awb_searching">AWB đang dò</string>
+    <string name="hud_v_awb_locked">AWB đã khóa</string>
+    <string name="hud_v_awb_inactive">AWB không hoạt động</string>
+    <string name="hud_v_good">Tốt</string>
+    <string name="hud_v_fair">Trung bình</string>
+    <string name="hud_v_poor">Kém</string>
+    <string name="hud_v_discharging">đang xả</string>
+    <string name="hud_v_charging">đang sạc</string>
+    <string name="hud_v_mic_active">Hoạt động · %1$s</string>
+    <string name="hud_v_mic_off">Tắt</string>
+    <string name="hud_v_mic_no_permission">Chưa cấp quyền</string>
+    <string name="hud_v_on">Bật</string>
+    <string name="hud_v_off">Tắt</string>
+
+    <!-- HUD value formats and network type labels -->
+    <string name="hud_f_ms_avg">%1$s ms TB</string>
+    <string name="hud_f_mm_eq">%1$d mm tương đương</string>
+    <string name="hud_v_cellular">Di động</string>
+    <string name="hud_v_offline">Ngoại tuyến</string>
 </resources>

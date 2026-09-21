@@ -34,4 +34,89 @@
     <color name="os_overlay_dark">#B3000000</color>
     <color name="os_scrim_top">#80000000</color>
     <color name="os_scrim_bottom">#CC000000</color>
+
+    <!-- ── Camera screen (cam_*) ──
+         Always-dark tokens for the camera activity, drawn over the live preview.
+         No values-night variant on purpose: this screen never follows the system theme. -->
+
+    <!-- Semantic -->
+    <color name="cam_ok">#FF00C382</color>
+    <color name="cam_warn">#FFFFB546</color>
+    <color name="cam_err">#FFFF6A5E</color>
+    <color name="cam_live">#FFFF3B30</color>
+    <color name="cam_accent">#FF0062FF</color>
+    <color name="cam_accent_soft">#FF4D94FF</color>
+    <color name="cam_on_light">#FF07080A</color>
+    <color name="cam_on_light_60">#9907080A</color>
+
+    <!-- Surfaces and borders -->
+    <color name="cam_surface">#9908090B</color>
+    <color name="cam_surface_62">#9E08090B</color>
+    <color name="cam_surface_66">#A808090B</color>
+    <color name="cam_border">#29FFFFFF</color>
+    <color name="cam_border_soft">#24FFFFFF</color>
+    <color name="cam_border_strong">#2EFFFFFF</color>
+
+    <!-- Text (white at the given opacity) -->
+    <color name="cam_white_92">#EBFFFFFF</color>
+    <color name="cam_text">#FFFFFFFF</color>
+    <color name="cam_text_80">#CCFFFFFF</color>
+    <color name="cam_text_72">#B8FFFFFF</color>
+    <color name="cam_text_66">#A8FFFFFF</color>
+    <color name="cam_text_62">#9EFFFFFF</color>
+    <color name="cam_text_60">#99FFFFFF</color>
+    <color name="cam_text_58">#94FFFFFF</color>
+    <color name="cam_text_55">#8CFFFFFF</color>
+    <color name="cam_text_50">#80FFFFFF</color>
+    <color name="cam_text_45">#73FFFFFF</color>
+    <color name="cam_text_40">#66FFFFFF</color>
+    <color name="cam_text_38">#61FFFFFF</color>
+    <color name="cam_text_35">#59FFFFFF</color>
+    <color name="cam_text_22">#38FFFFFF</color>
+    <color name="cam_text_20">#33FFFFFF</color>
+
+    <!-- Ghost fills and dividers -->
+    <color name="cam_ghost">#1AFFFFFF</color>
+    <color name="cam_ghost_08">#14FFFFFF</color>
+    <color name="cam_ghost_07">#12FFFFFF</color>
+    <color name="cam_ghost_05">#0DFFFFFF</color>
+    <color name="cam_divider">#12FFFFFF</color>
+
+    <!-- Sheet, scrim, identify overlay -->
+    <color name="cam_sheet_bg">#F70E0F11</color>
+    <color name="cam_scrim">#8C000000</color>
+    <color name="cam_identify">#DB0062FF</color>
+
+    <!-- Alert banner -->
+    <color name="cam_alert_err_bg">#995A100C</color>
+    <color name="cam_alert_err_border">#99FF3B30</color>
+    <color name="cam_alert_warn_bg">#944E3408</color>
+    <color name="cam_alert_warn_border">#8CFFB546</color>
+    <color name="cam_alert_ok_bg">#8C063A28</color>
+    <color name="cam_alert_ok_border">#8000C382</color>
+
+    <!-- Status pill tints -->
+    <color name="cam_pill_lost_bg">#9E5A100C</color>
+    <color name="cam_pill_lost_border">#A6FF3B30</color>
+    <color name="cam_pill_reconnecting_bg">#994E3408</color>
+    <color name="cam_pill_reconnecting_border">#99FFB546</color>
+    <color name="cam_pill_blue_border">#804D94FF</color>
+    <color name="cam_pill_green_border">#8C00C382</color>
+    <color name="cam_pill_amber_border">#8CFFB546</color>
+
+    <!-- OBS slot rows -->
+    <color name="cam_slot_bg">#0DFFFFFF</color>
+    <color name="cam_slot_border">#1AFFFFFF</color>
+    <color name="cam_slot_selected_bg">#290062FF</color>
+    <color name="cam_slot_selected_border">#B30062FF</color>
+
+    <!-- CTA, tabs and preview gradients -->
+    <color name="cam_cta_stop">#EBFF3B30</color>
+    <color name="cam_cta_amber">#EBFFB546</color>
+    <color name="cam_cta_blue_dim">#990062FF</color>
+    <color name="cam_tab_active">#E60062FF</color>
+    <color name="cam_scrim_top_start">#B8000000</color>
+    <color name="cam_scrim_top_mid">#2E000000</color>
+    <color name="cam_scrim_bottom_mid">#4D000000</color>
+    <color name="cam_scrim_bottom_end">#DB000000</color>
 </resources>

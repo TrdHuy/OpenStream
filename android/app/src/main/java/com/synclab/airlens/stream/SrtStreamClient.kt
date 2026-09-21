@@ -34,6 +34,47 @@ data class SrtSendResult(
     val recoveryRequired: Boolean = false,
 )
 
+/**
+ * Point-in-time SRT link statistics for the active socket, as reported by libsrt
+ * (`srt_bistats`). Packet counters are cumulative for the socket's lifetime, so a
+ * consumer that wants per-interval values must diff consecutive samples itself.
+ */
+data class SrtLinkStats(
+    val rttMs: Double,
+    val sentPackets: Long,
+    /** `pktSndLossTotal` — packets the receiver reported lost. */
+    val lostPackets: Long,
+    /** `pktRetransTotal` — packets this sender retransmitted. */
+    val retransmittedPackets: Long,
+    /** `mbpsSendRate` — libsrt's own send-rate estimate. */
+    val sendRateMbps: Double,
+) {
+    /** Lost packets as a percentage of sent packets; 0.0 before anything has been sent. */
+    val lossPercent: Double
+        get() = if (sentPackets <= 0) 0.0 else lostPackets * 100.0 / sentPackets
+
+    companion object {
+        /** Length of the array returned by `SrtNativeBridge.sampleStats()`. */
+        internal const val NATIVE_FIELD_COUNT = 5
+
+        /**
+         * Maps the raw JNI sample
+         * `[msRTT, pktSentTotal, pktSndLossTotal, pktRetransTotal, mbpsSendRate]`.
+         * Returns null when the array is shorter than [NATIVE_FIELD_COUNT].
+         */
+        internal fun fromNativeSample(values: DoubleArray): SrtLinkStats? {
+            if (values.size < NATIVE_FIELD_COUNT) return null
+            return SrtLinkStats(
+                rttMs = values[0],
+                sentPackets = values[1].toLong(),
+                lostPackets = values[2].toLong(),
+                retransmittedPackets = values[3].toLong(),
+                sendRateMbps = values[4],
+            )
+        }
+    }
+}
+
 class SrtStreamClient {
     @Volatile private var connected = false
     private val sessionGeneration = AtomicLong()
@@ -153,6 +194,21 @@ class SrtStreamClient {
 
     fun isCurrentSessionGeneration(generation: Long): Boolean = synchronized(stateLock) {
         sessionGeneration.get() == generation
+    }
+
+    /**
+     * Samples live SRT link statistics for the current session.
+     *
+     * Returns null when the transport is not connected or the native bridge has
+     * nothing to report (no socket yet, libsrt error, or a build without libsrt).
+     * This is a cheap local counter read: it takes neither [stateLock] nor the
+     * native media/io locks, so it never delays a send and is safe to call once a
+     * second from a background telemetry thread.
+     */
+    fun sampleLinkStats(): SrtLinkStats? {
+        if (!connected) return null
+        val values = SrtNativeBridge.sampleStats() ?: return null
+        return SrtLinkStats.fromNativeSample(values)
     }
 
     fun disconnect() {
@@ -283,4 +339,10 @@ private object SrtNativeBridge {
     external fun sendVideo(data: ByteArray, presentationTimeUs: Long, flags: Int): Boolean
     external fun sendAudio(data: ByteArray, presentationTimeUs: Long, flags: Int): Boolean
     external fun disconnect(sessionGeneration: Long)
+
+    /**
+     * `[msRTT, pktSentTotal, pktSndLossTotal, pktRetransTotal, mbpsSendRate]` for the
+     * active socket, or null when no statistics are available.
+     */
+    external fun sampleStats(): DoubleArray?
 }

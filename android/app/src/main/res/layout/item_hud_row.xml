@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AirLens — one row of the telemetry sheet (hudSheetRows).
+  Root is a vertical LinearLayout so the 1dp bottom divider can sit under the row.
+  hudRowNote is GONE until the bound HudRow carries a note; hudRowValue colour is the
+  HudTone (Neutral = cam_white_92) and uses tabular numerals.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/hudRowRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="top"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/hudRowKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/cam_text_66"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif" />
+
+            <TextView
+                android:id="@+id/hudRowNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/cam_text_38"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/hudRowValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:gravity="end"
+            android:textColor="@color/cam_white_92"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+
+    <!-- Row divider (decorative). -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/cam_divider"
+        android:importantForAccessibility="no" />
+</LinearLayout>

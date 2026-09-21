@@ -36,6 +36,19 @@ class MediaCodecAudioEncoder(
     @Volatile private var captureGeneration = 0L
     private val lifecycleLock = Any()
     private val deliveryLock = Any()
+    @Volatile private var latestLevel: PcmLevel? = null
+    @Volatile private var capturing = false
+
+    /** True between a successful [start] and the next [stop]; stays false when audio is disabled by configuration. */
+    val isCapturing: Boolean
+        get() = capturing
+
+    /**
+     * Latest microphone level over the most recent ~20 ms capture buffer, measured on the capture
+     * thread. Volatile snapshot that is cheap to poll from any thread; `null` while not capturing
+     * or before the first buffer has been read.
+     */
+    fun latestLevel(): PcmLevel? = if (capturing) latestLevel else null
 
     fun start() = synchronized(lifecycleLock) {
         if (!StreamConfig.Default1080p30.audioEnabled) {
@@ -104,6 +117,7 @@ class MediaCodecAudioEncoder(
                         }
                         if (captureGeneration != generation) break
                         if (bytesRead > 0) {
+                            latestLevel = PcmLevelMeter.measure(pcmBuffer, bytesRead)
                             val samplesRead = bytesRead / bytesPerSampleFrame()
                             val inputIndex = encoder.dequeueInputBuffer(10_000)
                             if (captureGeneration != generation) break
@@ -143,6 +157,7 @@ class MediaCodecAudioEncoder(
                 isDaemon = true
                 start()
             }
+            capturing = true
         } catch (error: Throwable) {
             stop()
             throw error
@@ -150,6 +165,7 @@ class MediaCodecAudioEncoder(
     }
 
     fun stop() = synchronized(lifecycleLock) {
+        capturing = false
         synchronized(deliveryLock) {
             captureGeneration += 1
         }
@@ -159,6 +175,7 @@ class MediaCodecAudioEncoder(
         runCatching { recorder?.release() }
         captureThread?.join(500)
         captureThread = null
+        latestLevel = null
 
         val encoder = codec
         codec = null

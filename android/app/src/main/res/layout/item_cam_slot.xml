@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AirLens — one discovered OBS camera slot (obsSlotList).
+  Code binds slotName (device.displayLabel), slotSub (free / busy / reserved copy) and
+  slotMark (Use · Busy · Paired · Live) plus its colour, and swaps the background to
+  bg_cam_slot_row_selected for the paired row. Busy rows are dimmed to 45 % alpha and
+  made non-clickable in code. Row height (11 + 19 + 16 + 11 ≈ 57dp) clears the 44dp
+  touch-target minimum.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/slotRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="7dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/bg_cam_slot_row"
+    android:paddingStart="12dp"
+    android:paddingTop="11dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="11dp"
+    android:minHeight="44dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/slotName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/cam_text"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/slotSub"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/cam_text_58"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif"
+            android:maxLines="1"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/slotMark"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:textColor="@color/cam_accent_soft"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-medium"
+        android:maxLines="1" />
+</LinearLayout>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AirLens — one key/value row of the glance HUD card (hudGlanceRows).
+  Inflated once per HudRow (5 rows); key/value text and value tone colour are bound in code.
+  glanceValue defaults to the Neutral tone (cam_white_92) and uses tabular numerals so
+  updating digits do not jitter horizontally.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp">
+
+    <TextView
+        android:id="@+id/glanceKey"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/cam_text_62"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/glanceValue"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="14dp"
+        android:textColor="@color/cam_white_92"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-medium"
+        android:fontFeatureSettings="tnum"
+        android:maxLines="1" />
+</LinearLayout>
