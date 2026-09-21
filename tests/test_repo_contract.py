@@ -21,12 +21,14 @@ def test_architecture_documents_practical_v1_transport() -> None:
 
 def test_android_project_declares_camera_media_codec_srt_discovery_boundaries() -> None:
     app = read("android/app/src/main/java/com/synclab/airlens/MainActivity.kt")
+    ui_model = read("android/app/src/main/java/com/synclab/airlens/ui/CameraUiModel.kt")
     discovery = read("android/app/src/main/java/com/synclab/airlens/discovery/PhoneDiscoveryAdvertiser.kt")
     manifest = read("android/app/src/main/AndroidManifest.xml")
     assert "Camera2" in app
     assert "MediaCodec" in app
     assert "SrtStreamClient" in app
-    assert "status_ready" in app
+    assert "ConnectionPhase.Ready" in ui_model
+    assert "R.string.cam_state_ready" in ui_model
     assert "PhoneDiscoveryAdvertiser" in app
     assert "startPreviewIfAllowed" in app
     assert "startPhoneServerIfAllowed" in app
@@ -147,14 +149,19 @@ def test_obs_discovery_beacons_advertise_slots_not_raw_listener_only() -> None:
 def test_slot_reservation_allows_owned_busy_phone_and_reconnect_hold() -> None:
     source = read("obs-plugin/src/openstream-source.cpp")
     app = read("android/app/src/main/java/com/synclab/airlens/MainActivity.kt")
+    ui_model = read("android/app/src/main/java/com/synclab/airlens/ui/CameraUiModel.kt")
     advertiser = read("android/app/src/main/java/com/synclab/airlens/discovery/PhoneDiscoveryAdvertiser.kt")
+    strings = read("android/app/src/main/res/values/strings.xml")
     assert "entry.second.busy && entry.second.reserved_by != source_instance_id" in source
     assert "found->second.busy && found->second.reserved_by != source_instance_id" in source
     assert "set_slot_status(ctx, \"Reconnecting\")" in source
     assert "set_active_phone(ctx, reserved_phone)" in source
     assert '"reservedBy"' in advertiser
     assert "RECONNECT_RESERVATION_MS = 45_000L" in app
-    assert "Holding $it for reconnect" in app
+    assert "CameraAlert.Lost((RECONNECT_RESERVATION_MS / 1_000L).toInt())" in app
+    assert "body = strings.get(R.string.cam_alert_lost_body, alert.holdSeconds)" in ui_model
+    assert 'name="cam_alert_lost_body"' in strings
+    assert "slot is held for %1$d s" in strings
     assert "scheduleReservationRelease" in app
     assert "cancelReservationRelease" in app
 
@@ -187,7 +194,12 @@ def test_android_discovery_ui_parses_and_displays_obs_slots() -> None:
     assert "ObsDiscoveryClient(" in app
     assert "renderObsSlots" in app
     assert "reserveForSlot" in app
-    assert "slotAvailabilityLabel" in app
+    assert "isReservedForThisPhone -> getString(R.string.cam_slot_sub_reserved)" in app
+    assert "device.busy -> getString(R.string.cam_slot_sub_busy)" in app
+    assert "mark.text = getString(R.string.cam_slot_live)" in app
+    assert "mark.text = getString(R.string.cam_slot_paired)" in app
+    assert "mark.text = getString(R.string.cam_slot_busy)" in app
+    assert "mark.text = getString(R.string.cam_slot_use)" in app
     assert "device.busy && reservedBy != device.sourceInstanceId" in app
     assert "compareBy<DiscoveredObsDevice> { it.displayLabel }" in discovery
     assert "obsSlotList" in layout

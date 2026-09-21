@@ -3,6 +3,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "android/app/src/main/java/com/synclab/airlens/MainActivity.kt"
+HUD_CONTROLLER = ROOT / "android/app/src/main/java/com/synclab/airlens/ui/CameraHudController.kt"
+HUD_COLLECTOR = ROOT / "android/app/src/main/java/com/synclab/airlens/telemetry/HudTelemetryCollector.kt"
 
 
 def test_caller_transport_failure_preserves_target_and_schedules_reconnect() -> None:
@@ -46,13 +48,20 @@ def test_reconnect_has_bounded_backoff_and_user_stop_cancels_it() -> None:
 
 
 def test_phase3_counter_chip_is_preserved_while_detail_gets_phase6_telemetry() -> None:
-    source = MAIN.read_text(encoding="utf-8")
+    main = MAIN.read_text(encoding="utf-8")
+    controller = HUD_CONTROLLER.read_text(encoding="utf-8")
+    collector = HUD_COLLECTOR.read_text(encoding="utf-8")
+    telemetry_start = main.index("private fun onTelemetrySnapshot")
+    telemetry_end = main.index("private fun update(", telemetry_start)
+    telemetry = main[telemetry_start:telemetry_end]
 
-    assert '"%d f · %d kf · %.1f Mb"' in source
-    assert "sendRateMeter.sample(stats.lifetimeBytesSent)" in source
-    assert "stats.audioAccessUnitsSent" in source
-    assert "stats.reconnects" in source
-    assert "stats.connectionLosses" in source
-    assert 'Log.i(\n                "OpenStreamTelemetry"' in source
-    assert "device.wifiRssi" in source
-    assert "device.temperatureCelsius" in source
+    assert 'STREAM_INFO_CHIP_FORMAT = "%d f · %d kf · %.1f Mb"' in controller
+    assert "streamInfoChip.text = String.format(" in controller
+    assert "bitrateMeter.sample(stats.lifetimeBytesSent" in collector
+    assert "audioFrames = stats.audioAccessUnitsSent" in collector
+    assert "reconnects = stats.reconnects" in collector
+    assert "connectionLosses = stats.connectionLosses" in collector
+    assert "Log.i(" in telemetry
+    assert '"OpenStreamTelemetry"' in telemetry
+    assert '"rssi=${snapshot.wifiRssi}' in telemetry
+    assert '"temperatureC=${snapshot.temperatureC}' in telemetry

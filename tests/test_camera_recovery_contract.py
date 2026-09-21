@@ -101,7 +101,7 @@ def test_capture_session_failures_recover_only_current_camera():
     )
     startup = _block_after(configured, "runCatching")
     assert "device.createCaptureRequest(template)" in startup
-    assert "captureSession.setRepeatingRequest(request, null, handler)" in startup
+    assert "captureSession.setRepeatingRequest(request, captureCallback, handler)" in startup
     failure = _block_after(configured, ".onFailure { error ->")
     assert "sessionGeneration.get() == generation && camera === device" in failure
     assert "recoverFromSessionFailure(" in failure

@@ -28,7 +28,9 @@ def test_connection_loss_is_counted_once_per_transport_generation() -> None:
     assert "val reconnects: Long = 0" in source
     assert "successfulConnections.incrementAndGet()" in source
     assert "(connections - 1L).coerceAtLeast(0L)" in source
-    failure = source[source.index("private fun markSendFailure") : source.index("companion object")]
+    failure_start = source.index("private fun markSendFailure")
+    failure_end = source.index("companion object", failure_start)
+    failure = source[failure_start:failure_end]
     assert "failedGeneration.get() != generation" in failure
     assert "connectionLosses.incrementAndGet()" in failure
     assert "connected = false" in failure

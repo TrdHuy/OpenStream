@@ -114,7 +114,7 @@ def test_stale_capture_session_callbacks_are_closed_not_published():
     assert configured_critical.index("captureSession.close()") < configured_critical.index(
         "session = captureSession"
     )
-    assert "captureSession.setRepeatingRequest(request, null, handler)" in configured_critical
+    assert "captureSession.setRepeatingRequest(request, captureCallback, handler)" in configured_critical
 
     failed_critical = _block_after(failed, "synchronized(lifecycleLock)")
     assert "!desiredRunning" in failed_critical
